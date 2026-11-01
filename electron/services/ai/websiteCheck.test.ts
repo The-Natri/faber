@@ -336,3 +336,12 @@ describe('Phase 2 fixes', () => {
     expect(await suggestNameMatch(db, g, id)).toMatchObject({ decision: 'match', lowConfidence: true, evidenceUrl: null });
   });
 });
+
+describe('about_business', () => {
+  it('turns any verdict into unknown when no evidence is about the business', () => {
+    expect(parseDecision('{"about_business": false, "verdict": "no_site", "evidence_url": "https://blog.example/cafes", "reason": "No website for Avin Store"}', ['https://blog.example/cafes']))
+      .toEqual({ verdict: 'unknown', evidenceUrl: null, reason: 'Nothing found about this business. No website for Avin Store' });
+    expect(parseDecision('{"about_business": true, "verdict": "no_site", "evidence_url": null, "reason": "Listings only"}', []))
+      .toMatchObject({ verdict: 'no_site' });
+  });
+});
