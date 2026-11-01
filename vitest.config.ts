@@ -5,5 +5,8 @@ export default defineConfig({
   test: {
     include: ['electron/**/*.test.ts'],
     environment: 'node',
+    // The auth tests run real scrypt and the pipeline/trash tests real SQLite; under CPU load a few
+    // took just over the 5 s default
+    testTimeout: 15_000,
   },
 });
