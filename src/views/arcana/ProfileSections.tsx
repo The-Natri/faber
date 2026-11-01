@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { call, errorText } from '../../lib/ipc.ts';
 import { useSettings } from '../../lib/settings.ts';
-import { Button, Checkbox, Field, Input, Select, Slider, Switch, useToast } from '../../ui/index.ts';
+import { Button, Checkbox, Field, Input, Select, Slider, Switch, Textarea, useToast } from '../../ui/index.ts';
 import { cn } from '../../lib/format.ts';
 import { configureSound, playSound } from '../../lib/sound.ts';
 import { CATEGORIES } from '../../../shared/types.ts';
@@ -169,6 +169,10 @@ export function OutreachSection() {
           <Select value={draft.defaultLanguage} onChange={(defaultLanguage) => set({ defaultLanguage })} options={[{ value: 'en', label: 'English' }, { value: 'ta', label: 'Tamil' }]} label="Default language" />
         </Field>
       </div>
+      <Field label="Your offer, for AI pitch drafts" htmlFor="o-offer"
+        hint="One or two sentences about what you build. It goes to the pitch model, so leave out your name, number and email: Faber adds your sign-off from Profile after the draft is written. AI drafts are English only.">
+        <Textarea id="o-offer" rows={3} maxLength={400} value={draft.pitchOffer} onChange={(e) => set({ pitchOffer: e.target.value })} />
+      </Field>
     </SectionPanel>
   );
 }

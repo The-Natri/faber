@@ -145,6 +145,7 @@ const chatPick = (b: Json) => ({ model: at(b, 'model'), text: at(b, 'choices.0.m
 // Dashboard routing policies have no catalog row; their estimate is the dearest member's
 const POLICY_MEMBERS: Record<string, string[]> = {
   'faber-verify': ['mistralai/mistral-small-4', 'mistralai/mistral-large-3'],
+  'faber-pitch': ['deepseek/deepseek-v4-pro', 'mistralai/mistral-large-3'],
 };
 
 async function pricesOf(model: string): Promise<{ input: number; output: number } | undefined> {

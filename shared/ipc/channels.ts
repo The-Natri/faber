@@ -27,6 +27,7 @@ export const INVOKE_CHANNELS = [
   'ai:stopWebsiteChecks',
   'ai:websiteCheckState',
   'ai:suggestNameMatch',
+  'ai:draftPitch',
 
   'backup:list',
   'backup:create',
@@ -53,6 +54,7 @@ export const INVOKE_CHANNELS = [
   'leads:markNotAFit',
   'leads:unflagChain',
   'leads:resolveReview',
+  'leads:logContact',
 
   'chains:list',
   'chains:add',

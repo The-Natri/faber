@@ -132,6 +132,18 @@ export function resolveEnrichmentReview(db: Database.Database, id: number, decis
   return requireLead(db, id);
 }
 
+// Recorded only when the user confirms a message was actually sent ("Sent?" after opening WhatsApp).
+// It's the contact attempt goals and streaks count; a New lead also moves to Contacted.
+export function logContactAttempt(db: Database.Database, id: number, channel: 'whatsapp', note: string | null): Lead {
+  const lead = requireLead(db, id);
+  db.transaction(() => {
+    addActivity(db, id, 'contact_attempt', { channel, body: note });
+    db.prepare(`UPDATE leads SET last_contacted_at = datetime('now'), last_updated = datetime('now') WHERE id = ?`).run(id);
+    if (lead.status === 'new') moveLead(db, id, 'contacted');
+  })();
+  return requireLead(db, id);
+}
+
 export function leadActivity(db: Database.Database, id: number): LeadActivity[] {
   requireLead(db, id);
   return db.prepare('SELECT * FROM lead_activity WHERE lead_id = ? ORDER BY created_at DESC, id DESC').all(id) as LeadActivity[];

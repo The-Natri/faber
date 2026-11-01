@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { EventChannel, InvokeChannel } from './channels.ts';
 import { LEAD_STATUSES, LOST_REASONS } from '../pipeline.ts';
 import { SECRET_NAMES, SETTINGS_SECTIONS, type Appearance, type SettingsSection, type SettingsView } from '../settings.ts';
-import type { AiActivityPage, AiConnectionTest, AiStatus, NameMatchSuggestion, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
+import type { AiActivityPage, AiConnectionTest, AiStatus, NameMatchSuggestion, PitchDraft, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
 import type {
   AppInfo, AppNotification, BackupOverview, BulkResult, ChainPattern, DashboardData, LeadActivity, LeadFacets, DiscoveryResult, DiscoveryState,
   EnrichmentComplete, EnrichmentState, EntityOption, ExportEntity, Lead, Payment, Project,
@@ -93,6 +93,8 @@ export const requestSchemas = {
   'ai:websiteCheckState': none,
   // Suggests only; leads:resolveReview applies what the user decides
   'ai:suggestNameMatch': z.object({ leadId: id }),
+  // Model B through faber-pitch, about $0.0003; the template when Otari fails or a guardrail blocks
+  'ai:draftPitch': z.object({ leadId: id }),
 
   'backup:list': none,
   'backup:create': none,
@@ -148,6 +150,8 @@ export const requestSchemas = {
   'leads:markNotAFit': z.object({ id, addToBlocklist: z.boolean() }),
   'leads:unflagChain': z.object({ id }),
   'leads:resolveReview': z.object({ id, decision: z.enum(['match', 'no_match']), name: z.string().trim().max(200).optional() }),
+  // Only after the user confirms "Sent?"
+  'leads:logContact': z.object({ id, channel: z.literal('whatsapp'), note: z.string().max(2000).nullable().default(null) }),
 
   'chains:list': none,
   'chains:add': z.object({ pattern: z.string().trim().min(1).max(100) }),
@@ -276,6 +280,7 @@ export interface Responses {
   'ai:stopWebsiteChecks': void;
   'ai:websiteCheckState': WebsiteCheckState;
   'ai:suggestNameMatch': NameMatchSuggestion;
+  'ai:draftPitch': PitchDraft;
 
   'backup:list': BackupOverview;
   'backup:create': { name: string };
@@ -302,6 +307,7 @@ export interface Responses {
   'leads:markNotAFit': { alsoFlagged: number };
   'leads:unflagChain': void;
   'leads:resolveReview': Lead;
+  'leads:logContact': Lead;
 
   'chains:list': ChainPattern[];
   'chains:add': { flagged: number };

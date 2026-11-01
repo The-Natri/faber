@@ -51,6 +51,27 @@ export interface WebsiteCheckState {
   error: string | null;
 }
 
+// ---- Pitch drafts (Phase 3) ----
+
+export interface PitchDraft {
+  leadId: number;
+  // The message itself, as generated (or from the template); the user may edit it
+  body: string;
+  // Added by Faber after generation from Arcana → Profile; never sent to a model
+  signOff: string;
+  // 'ai' from Model B (or its fallback); 'template' when Otari failed or a guardrail blocked
+  source: 'ai' | 'template';
+  templateReason: string | null;
+  // App-side checks that failed (length, invented numbers, links, contact details); empty when clean
+  issues: string[];
+  servedModel: string | null;
+  provider: string | null;
+  fallback: boolean;
+  costUsd: number;
+  // The lead's number as +91…, for wa.me; null when it isn't an Indian mobile
+  phone: { e164: string; wa: string } | null;
+}
+
 // ---- Name-match helper (Phase 2) ----
 
 export interface NameMatchSuggestion {

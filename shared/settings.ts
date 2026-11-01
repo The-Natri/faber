@@ -55,6 +55,10 @@ export const outreachSchema = z.object({
   followUpDays: z.array(z.number().int().min(1).max(90)).min(1).max(5).default([3, 7, 14]),
   dailyGoal: z.number().int().min(1).max(100).default(10),
   defaultLanguage: z.enum(['en', 'ta']).default('en'),
+  // What you offer, in a sentence or two. Goes to the pitch model, so keep personal details out;
+  // Faber adds your name and number after the draft is written.
+  pitchOffer: z.string().trim().max(400)
+    .default('I build simple, mobile-friendly websites for local businesses, with Google Maps and WhatsApp ordering set up.'),
 });
 
 // AI goes through the Otari gateway (shared/ai.ts). Each model field names a routing policy or a
