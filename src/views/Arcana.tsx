@@ -10,6 +10,7 @@ import { Button, RuneStrip, ViewHeader } from '../ui/index.ts';
 import { AppearanceSection, DiscoveryDefaultsSection, HomeBaseSection, OutreachSection, ProfileSection } from './arcana/ProfileSections.tsx';
 import { IntegrationsSection, SecuritySection } from './arcana/SecuritySections.tsx';
 import { BackupsSection, DataSection } from './arcana/DataSections.tsx';
+import { AiActivitySection } from './arcana/AiActivitySection.tsx';
 import { SectionPanel } from './arcana/common.tsx';
 
 const SECTIONS = [
@@ -20,6 +21,7 @@ const SECTIONS = [
   { id: 'discovery', label: 'Discovery defaults' },
   { id: 'outreach', label: 'Outreach' },
   { id: 'integrations', label: 'Integrations' },
+  { id: 'aiActivity', label: 'AI Activity' },
   { id: 'backups', label: 'Backups' },
   { id: 'data', label: 'Data & trash' },
   { id: 'about', label: 'About' },
@@ -81,6 +83,7 @@ export default function Arcana({ request }: ViewProps) {
             {section === 'discovery' && <DiscoveryDefaultsSection />}
             {section === 'outreach' && <OutreachSection />}
             {section === 'integrations' && <IntegrationsSection />}
+            {section === 'aiActivity' && <AiActivitySection />}
             {section === 'backups' && <BackupsSection />}
             {section === 'data' && <DataSection />}
             {section === 'about' && <AboutSection />}
