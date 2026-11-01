@@ -17,7 +17,8 @@ const WEBSITE_OPTIONS: { value: WebsiteStatus | typeof ANY; label: string }[] = 
   { value: ANY, label: 'Any' },
   { value: 'none', label: 'No website' },
   { value: 'found', label: 'Has a website' },
-  { value: 'unknown', label: 'Not checked yet' },
+  { value: 'outdated', label: 'Outdated website' },
+  { value: 'unknown', label: 'Unknown or not checked' },
 ];
 const SORT_OPTIONS: { value: LeadSort; label: string }[] = [
   { value: 'score', label: 'Score' },

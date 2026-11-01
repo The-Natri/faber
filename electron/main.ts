@@ -8,6 +8,7 @@ import { NotificationCenter } from './services/notifications/index.ts';
 import { DiscoveryRunner } from './services/discovery/index.ts';
 import { EnrichmentRunner } from './services/enrichment/index.ts';
 import { OtariGateway } from './services/ai/gateway.ts';
+import { WebsiteCheckRunner } from './services/ai/websiteRunner.ts';
 import { startAutoBackup } from './services/backup/index.ts';
 import { purgeExpired } from './services/trash/index.ts';
 import { createHandlers, registerIpc } from './ipc/index.ts';
@@ -181,6 +182,11 @@ app.whenReady().then(async () => {
     };
   });
 
+  const websiteChecks = new WebsiteCheckRunner(getDB, ai, {
+    onState: (state) => emit('websiteCheck:state', state),
+    delayMs: () => settings.get('integrations').websiteDelaySeconds * 1000,
+  });
+
   const ctx: AppContext = {
     db: getDB,
     dbPath: databasePath(),
@@ -193,6 +199,7 @@ app.whenReady().then(async () => {
     discovery,
     enrichment,
     ai,
+    websiteChecks,
     window: () => mainWindow,
     relaunch: () => {
       app.relaunch();

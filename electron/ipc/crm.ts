@@ -2,8 +2,8 @@ import type { AppContext } from '../context.ts';
 import type { PartialHandlerMap } from './core.ts';
 import { addPattern, listPatterns, markNotAFit, removePattern, unflagLead } from '../services/leads/chains.ts';
 import {
-  bulkLeads, createLead, getLead, leadActivity, leadFacets, listLeads, moveLead, setStarred, setTags, softDeleteLead,
-  updateLead, updateLeadNotes,
+  bulkLeads, createLead, getLead, leadActivity, leadFacets, listLeads, moveLead, resolveEnrichmentReview, setStarred, setTags,
+  softDeleteLead, updateLead, updateLeadNotes,
 } from '../services/leads/index.ts';
 import { addWorkLog, createProject, listProjects, softDeleteProject, updateProject, updateProjectStage } from '../services/projects/index.ts';
 import { createPayment, listPayments, markPaymentReceived, softDeletePayment } from '../services/payments/index.ts';
@@ -26,6 +26,7 @@ export function leadsHandlers(ctx: AppContext) {
     'leads:delete': ({ id }) => softDeleteLead(ctx.db(), id),
     'leads:markNotAFit': ({ id, addToBlocklist }) => markNotAFit(ctx.db(), id, addToBlocklist),
     'leads:unflagChain': ({ id }) => unflagLead(ctx.db(), id),
+    'leads:resolveReview': ({ id, decision, name }) => resolveEnrichmentReview(ctx.db(), id, decision, name),
     'chains:list': () => listPatterns(ctx.db()),
     'chains:add': ({ pattern }) => addPattern(ctx.db(), pattern),
     'chains:remove': ({ id }) => removePattern(ctx.db(), id),

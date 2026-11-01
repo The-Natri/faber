@@ -13,7 +13,7 @@ function stub(answer: string | Error) {
     chat: async (request): Promise<ChatResult> => {
       requests.push(request);
       if (answer instanceof Error) throw answer;
-      return { text: answer, activity };
+      return { text: answer, toolCalls: [], activity };
     },
   };
   return { gateway, requests };

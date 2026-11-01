@@ -45,6 +45,8 @@ describe('SettingsService', () => {
       modelVerify: 'faber-verify',
       modelPitch: 'deepseek/deepseek-v4-pro',
       modelScreener: 'openai/gpt-oss-safeguard-20b',
+      websiteBatchSize: 5,
+      websiteDelaySeconds: 3,
       telegramChatId: '',
     });
     expect(settings.backups).toEqual({ folder: null, keep: 14 });

@@ -22,6 +22,11 @@ export const INVOKE_CHANNELS = [
   'ai:status',
   'ai:testConnection',
   'ai:activity',
+  'ai:checkWebsite',
+  'ai:startWebsiteChecks',
+  'ai:stopWebsiteChecks',
+  'ai:websiteCheckState',
+  'ai:suggestNameMatch',
 
   'backup:list',
   'backup:create',
@@ -47,6 +52,7 @@ export const INVOKE_CHANNELS = [
   'leads:delete',
   'leads:markNotAFit',
   'leads:unflagChain',
+  'leads:resolveReview',
 
   'chains:list',
   'chains:add',
@@ -101,6 +107,7 @@ export const EVENT_CHANNELS = [
   'enrichment:captcha',
   'enrichment:complete',
   'enrichment:state',
+  'websiteCheck:state',
   'notifications:new',
 ] as const;
 

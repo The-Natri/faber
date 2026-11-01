@@ -65,9 +65,14 @@ export interface Lead {
   last_contacted_at: string | null;
   website_url: string | null;
   website_status: WebsiteStatus;
+  // From the AI website check (Phase 2); null until a lead has been checked
+  website_evidence: string | null;
+  website_reason: string | null;
+  website_checked_at: string | null;
 }
 
-export type WebsiteStatus = 'none' | 'found' | 'unknown';
+// 'unknown' means not checked yet, or the check couldn't decide
+export type WebsiteStatus = 'none' | 'found' | 'outdated' | 'unknown';
 export type LeadSort = 'score' | 'name' | 'newest' | 'last_contacted';
 
 // Codex filters; every one is applied in SQL (§8.1)

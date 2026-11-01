@@ -109,6 +109,29 @@ function addActivity(db: Database.Database, leadId: number, type: LeadActivity['
     .run(leadId, type, fields.channel ?? null, fields.outcome ?? null, fields.body ?? null);
 }
 
+// The user's decision on a lead enrichment flagged 'review' (its Google Maps name didn't match).
+// match: the lead takes the name the business uses online and goes back into the enrichment queue,
+// where the name now matches. no_match: it is skipped from enrichment. Either way the timeline says so.
+export function resolveEnrichmentReview(db: Database.Database, id: number, decision: 'match' | 'no_match', name?: string): Lead {
+  const lead = requireLead(db, id);
+  if (lead.enrichment_status !== 'review') throw new AppError('CONFLICT', `${lead.name} isn't waiting for a name check`);
+  const newName = name?.trim().replace(/\s+/g, ' ') ?? '';
+  if (decision === 'match' && !newName) throw new AppError('VALIDATION', 'Enter the name the business uses online');
+
+  db.transaction(() => {
+    if (decision === 'match') {
+      db.prepare(`UPDATE leads SET name = ?, enrichment_status = 'pending', last_updated = datetime('now') WHERE id = ?`).run(newName, id);
+      addActivity(db, id, 'note', { body: newName === lead.name
+        ? 'Name check: confirmed as the same business; queued for enrichment again'
+        : `Name check: confirmed as the same business, renamed from “${lead.name}” to “${newName}”; queued for enrichment again` });
+    } else {
+      db.prepare(`UPDATE leads SET enrichment_status = 'skipped', last_updated = datetime('now') WHERE id = ?`).run(id);
+      addActivity(db, id, 'note', { body: 'Name check: not the same business on Google Maps; skipped from enrichment' });
+    }
+  })();
+  return requireLead(db, id);
+}
+
 export function leadActivity(db: Database.Database, id: number): LeadActivity[] {
   requireLead(db, id);
   return db.prepare('SELECT * FROM lead_activity WHERE lead_id = ? ORDER BY created_at DESC, id DESC').all(id) as LeadActivity[];

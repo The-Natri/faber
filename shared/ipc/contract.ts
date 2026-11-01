@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { EventChannel, InvokeChannel } from './channels.ts';
 import { LEAD_STATUSES, LOST_REASONS } from '../pipeline.ts';
 import { SECRET_NAMES, SETTINGS_SECTIONS, type Appearance, type SettingsSection, type SettingsView } from '../settings.ts';
-import type { AiActivityPage, AiConnectionTest, AiStatus } from '../ai.ts';
+import type { AiActivityPage, AiConnectionTest, AiStatus, NameMatchSuggestion, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
 import type {
   AppInfo, AppNotification, BackupOverview, BulkResult, ChainPattern, DashboardData, LeadActivity, LeadFacets, DiscoveryResult, DiscoveryState,
   EnrichmentComplete, EnrichmentState, EntityOption, ExportEntity, Lead, Payment, Project,
@@ -83,6 +83,16 @@ export const requestSchemas = {
   // Costs a fraction of a cent: a free model list, then one 8-token call through Model A
   'ai:testConnection': none,
   'ai:activity': z.object({ limit: z.number().int().min(1).max(1000).default(200) }),
+  // About $0.011 per lead without a website_url (one web search), about $0.001 with one
+  'ai:checkWebsite': z.object({ leadId: id }),
+  'ai:startWebsiteChecks': z.union([
+    z.object({ count: z.number().int().min(1).max(20) }),
+    z.object({ leadIds: z.array(id).min(1).max(20) }),
+  ]),
+  'ai:stopWebsiteChecks': none,
+  'ai:websiteCheckState': none,
+  // Suggests only; leads:resolveReview applies what the user decides
+  'ai:suggestNameMatch': z.object({ leadId: id }),
 
   'backup:list': none,
   'backup:create': none,
@@ -104,7 +114,7 @@ export const requestSchemas = {
     scoreMax: z.number().min(0).max(100).default(100),
     tags: z.array(z.string().max(30)).max(20).default([]),
     starredOnly: z.boolean().default(false),
-    websiteStatus: z.enum(['none', 'found', 'unknown']).nullable().default(null),
+    websiteStatus: z.enum(['none', 'found', 'outdated', 'unknown']).nullable().default(null),
     showChains: z.boolean().default(false),
     sort: z.enum(['score', 'name', 'newest', 'last_contacted']).default('score'),
   }),
@@ -137,6 +147,7 @@ export const requestSchemas = {
   'leads:delete': z.object({ id }),
   'leads:markNotAFit': z.object({ id, addToBlocklist: z.boolean() }),
   'leads:unflagChain': z.object({ id }),
+  'leads:resolveReview': z.object({ id, decision: z.enum(['match', 'no_match']), name: z.string().trim().max(200).optional() }),
 
   'chains:list': none,
   'chains:add': z.object({ pattern: z.string().trim().min(1).max(100) }),
@@ -260,6 +271,11 @@ export interface Responses {
   'ai:status': AiStatus;
   'ai:testConnection': AiConnectionTest;
   'ai:activity': AiActivityPage;
+  'ai:checkWebsite': WebsiteCheckResult;
+  'ai:startWebsiteChecks': void;
+  'ai:stopWebsiteChecks': void;
+  'ai:websiteCheckState': WebsiteCheckState;
+  'ai:suggestNameMatch': NameMatchSuggestion;
 
   'backup:list': BackupOverview;
   'backup:create': { name: string };
@@ -285,6 +301,7 @@ export interface Responses {
   'leads:delete': void;
   'leads:markNotAFit': { alsoFlagged: number };
   'leads:unflagChain': void;
+  'leads:resolveReview': Lead;
 
   'chains:list': ChainPattern[];
   'chains:add': { flagged: number };
@@ -345,6 +362,7 @@ export interface Events {
   'enrichment:captcha': void;
   'enrichment:complete': EnrichmentComplete;
   'enrichment:state': EnrichmentState;
+  'websiteCheck:state': WebsiteCheckState;
   'notifications:new': AppNotification;
 }
 

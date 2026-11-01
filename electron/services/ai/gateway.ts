@@ -20,6 +20,19 @@ export interface ChatMessage {
   content: string;
 }
 
+// Tools Otari runs itself. Each search or fetch is priced per call ($0.01 on hosted EU).
+export type OtariTool = { type: 'otari_web_search'; max_uses?: number } | { type: 'otari_web_fetch' };
+
+// What Otari reports in `otari_tool_calls`. Sources are written by Otari, not the model; their titles
+// are still third-party text and get screened before a model reads them.
+export interface OtariToolCall {
+  type: string;
+  status: string;
+  query?: string;
+  url?: string;
+  sources: { url: string; title: string }[];
+}
+
 export interface ChatRequest {
   feature: AiFeature;
   model: string;
@@ -29,11 +42,32 @@ export interface ChatRequest {
   temperature?: number;
   leadId?: number | null;
   timeoutMs?: number;
+  tools?: OtariTool[];
+  // For tool-only calls whose text is thrown away: an empty answer is not an error
+  allowEmpty?: boolean;
 }
 
 export interface ChatResult {
   text: string;
+  toolCalls: OtariToolCall[];
   activity: AiActivity;
+}
+
+function toolCallsFrom(value: unknown): OtariToolCall[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw) => {
+    const call = asObject(raw);
+    if (!call) return [];
+    const sources = Array.isArray(call.sources) ? call.sources.flatMap((s) => {
+      const source = asObject(s);
+      return source && typeof source.url === 'string' ? [{ url: source.url, title: typeof source.title === 'string' ? source.title : '' }] : [];
+    }) : [];
+    return [{
+      type: String(call.type ?? ''), status: String(call.status ?? ''), sources,
+      ...(typeof call.query === 'string' ? { query: call.query } : {}),
+      ...(typeof call.url === 'string' ? { url: call.url } : {}),
+    }];
+  });
 }
 
 export type AiErrorKind = 'not_configured' | 'blocked' | 'budget' | 'auth' | 'timeout' | 'empty' | 'failed';
@@ -143,12 +177,16 @@ export class OtariGateway {
         messages: request.messages,
         max_tokens: request.maxTokens,
         ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+        // Otari's own tool types aren't in the SDK's union; the gateway runs them, not the model's provider
+        ...(request.tools ? { tools: request.tools as unknown as OpenAI.Chat.ChatCompletionTool[] } : {}),
       }).withResponse();
 
       const headers = response.headers;
       const usage = asObject(data.usage);
       const details = asObject(usage?.completion_tokens_details);
       const text = (data.choices[0]?.message?.content ?? '').trim();
+      const toolCalls = toolCallsFrom((data as unknown as Json).otari_tool_calls);
+      const answered = Boolean(text) || request.allowEmpty === true;
       const activity = recordAiActivity(this.db(), {
         ...base,
         model_served: headers.get('otari-model'),
@@ -157,9 +195,9 @@ export class OtariGateway {
         attempt_count: asNumber(headers.get('otari-attempt-count')),
         request_id: headers.get('otari-request-id'),
         guardrail: guardrailFrom(headers.get('otari-guardrails')),
-        outcome: text ? 'ok' : 'error',
+        outcome: answered ? 'ok' : 'error',
         http_status: response.status,
-        error_code: text ? null : 'empty_completion',
+        error_code: answered ? null : 'empty_completion',
         prompt_tokens: asNumber(usage?.prompt_tokens),
         completion_tokens: asNumber(usage?.completion_tokens),
         reasoning_tokens: asNumber(details?.reasoning_tokens),
@@ -167,8 +205,8 @@ export class OtariGateway {
         cost_usd: asNumber(usage?.cost_usd),
         latency_ms: Date.now() - started,
       });
-      if (!text) throw new AiError('empty', MESSAGES.empty, activity);
-      return { text, activity };
+      if (!answered) throw new AiError('empty', MESSAGES.empty, activity);
+      return { text, toolCalls, activity };
     } catch (error) {
       if (error instanceof AiError) throw error;
       const apiError = error instanceof APIError ? error : null;

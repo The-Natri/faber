@@ -9,7 +9,9 @@ import { SectionPanel } from './common.tsx';
 const FEATURE: Record<AiFeature, string> = {
   connection_test: 'Connection test',
   screen: 'Input screen',
+  web_search: 'Web search',
   website_check: 'Website check',
+  name_match: 'Name match',
   pitch: 'Pitch draft',
   pipeline_question: 'Pipeline question',
 };

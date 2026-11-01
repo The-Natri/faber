@@ -66,6 +66,9 @@ export const integrationsSchema = z.object({
   modelVerify: modelName(DEFAULT_MODELS.verify),
   modelPitch: modelName(DEFAULT_MODELS.pitch),
   modelScreener: modelName(DEFAULT_MODELS.screener),
+  // Website check batches: each lead costs about $0.011 (one web search plus small model calls)
+  websiteBatchSize: z.number().int().min(1).max(20).default(5),
+  websiteDelaySeconds: z.number().int().min(0).max(60).default(3),
   telegramChatId: z.string().trim().max(40).default(''),
 });
 

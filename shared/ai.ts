@@ -11,9 +11,57 @@ export const DEFAULT_MODELS = {
   screener: 'openai/gpt-oss-safeguard-20b',
 } as const;
 
-export type AiFeature = 'connection_test' | 'screen' | 'website_check' | 'pitch' | 'pipeline_question';
+export type AiFeature = 'connection_test' | 'screen' | 'web_search' | 'website_check' | 'name_match' | 'pitch' | 'pipeline_question';
 
 export type AiOutcome = 'ok' | 'blocked' | 'budget' | 'error';
+
+// ---- Website check (Phase 2) ----
+
+export type WebsiteVerdict = 'has_site' | 'no_site' | 'outdated_site' | 'unknown';
+
+export interface WebsiteCheckResult {
+  leadId: number;
+  name: string;
+  verdict: WebsiteVerdict;
+  evidenceUrl: string | null;
+  reason: string;
+  // 'fetch' read the lead's own website_url; 'search' looked the business up
+  path: 'fetch' | 'search';
+  screen: 'safe' | 'unsafe' | 'unscreened';
+  // The Model A call that decided, when one ran
+  servedModel: string | null;
+  provider: string | null;
+  fallback: boolean;
+  // Every Otari call for this lead: search, screen and decision
+  costUsd: number;
+  // Set when the check could not run (no key, spend limit, Otari down); the lead is left unchanged
+  error: string | null;
+  // Why, for an AI failure: a batch stops on 'budget', 'not_configured' and 'auth', which no next lead fixes
+  errorKind: string | null;
+}
+
+export interface WebsiteCheckState {
+  running: boolean;
+  processed: number;
+  total: number;
+  current: { id: number; name: string } | null;
+  // Newest first
+  results: WebsiteCheckResult[];
+  costUsd: number;
+  error: string | null;
+}
+
+// ---- Name-match helper (Phase 2) ----
+
+export interface NameMatchSuggestion {
+  leadId: number;
+  decision: 'match' | 'no_match' | 'unsure';
+  // The business's name as listed online, for a match
+  suggestedName: string | null;
+  evidenceUrl: string | null;
+  reason: string;
+  costUsd: number;
+}
 
 // What Otari's mandated guardrail (Lakera) said about the request's latest user message
 export type GuardrailResult = 'passed' | 'blocked' | 'not_reported';
