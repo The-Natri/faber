@@ -1,0 +1,232 @@
+import type Database from 'better-sqlite3';
+import type OpenAI from 'openai';
+import { APIConnectionTimeoutError, APIError } from 'openai';
+import { AppError } from '../../ipc/core.ts';
+import type {
+  AiActivity, AiConnectionTest, AiFeature, AiKeySource, AiOutcome, AiStatus, GuardrailResult,
+} from '../../../shared/ai.ts';
+import { recordAiActivity, type NewAiActivity } from './activity.ts';
+import { createOtariClient, type OtariClientOptions } from './client.ts';
+
+export interface AiConfig {
+  apiKey: string | null;
+  keySource: AiKeySource;
+  baseUrl: string;
+  models: AiStatus['models'];
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  feature: AiFeature;
+  model: string;
+  messages: ChatMessage[];
+  // Budgets hold the whole max_tokens up front, so keep it as low as the answer allows
+  maxTokens: number;
+  temperature?: number;
+  leadId?: number | null;
+  timeoutMs?: number;
+}
+
+export interface ChatResult {
+  text: string;
+  activity: AiActivity;
+}
+
+export type AiErrorKind = 'not_configured' | 'blocked' | 'budget' | 'auth' | 'timeout' | 'empty' | 'failed';
+
+// Every AI failure is one of these; features catch it and fall back (templates, "couldn't check").
+// `activity` is the logged row, absent only when no call was made.
+export class AiError extends AppError {
+  constructor(public kind: AiErrorKind, message: string, public activity: AiActivity | null = null) {
+    super('UNAVAILABLE', message);
+  }
+}
+
+const MESSAGES: Record<Exclude<AiErrorKind, 'failed'>, string> = {
+  not_configured: 'Add your Otari API key in Arcana → Integrations to use AI features.',
+  blocked: "Otari's guardrail blocked this request: it looked like a prompt injection or contained personal data.",
+  budget: 'The Otari spend limit has been reached. AI features are paused until it resets.',
+  auth: 'Otari rejected the API key. Check it in Arcana → Integrations.',
+  timeout: "Otari didn't answer in time.",
+  empty: 'The model returned an empty answer.',
+};
+
+type Json = Record<string, unknown>;
+const asObject = (value: unknown): Json | null => (value && typeof value === 'object' ? (value as Json) : null);
+const asNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+// `Otari-Guardrails` is a JSON list of {profile, mode, valid, score}; any invalid entry means flagged
+export function guardrailFrom(header: string | null): GuardrailResult {
+  if (!header) return 'not_reported';
+  try {
+    const verdicts = JSON.parse(header) as { valid?: boolean | null }[];
+    if (!Array.isArray(verdicts) || verdicts.length === 0) return 'not_reported';
+    if (verdicts.some((v) => v.valid === false)) return 'blocked';
+    return verdicts.every((v) => v.valid === true) ? 'passed' : 'not_reported';
+  } catch {
+    return 'not_reported';
+  }
+}
+
+// Otari puts its error code in the `Otari-Error-Code` header, in `code`, or inside `detail`
+export function otariErrorCode(headers: Headers | undefined, body: unknown): string | null {
+  const fromHeader = headers?.get('otari-error-code');
+  if (fromHeader) return fromHeader;
+  const object = asObject(body);
+  if (!object) return null;
+  if (typeof object.code === 'string') return object.code;
+  const detail = asObject(object.detail);
+  return detail && typeof detail.code === 'string' ? detail.code : null;
+}
+
+function classify(status: number | null, code: string | null): AiErrorKind {
+  if (code === 'guardrail_violation') return 'blocked';
+  if (code === 'budget_exceeded' || code === 'insufficient_funds' || status === 402) return 'budget';
+  if (status === 401) return 'auth';
+  if (status === 504) return 'timeout';
+  return 'failed';
+}
+
+const OUTCOME: Record<AiErrorKind, AiOutcome> = {
+  not_configured: 'error', blocked: 'blocked', budget: 'budget', auth: 'error', timeout: 'error', empty: 'error', failed: 'error',
+};
+
+export class OtariGateway {
+  constructor(
+    private readonly db: () => Database.Database,
+    private readonly config: () => AiConfig,
+    private readonly makeClient: (options: OtariClientOptions) => OpenAI = createOtariClient,
+  ) {}
+
+  status(): AiStatus {
+    const { apiKey, keySource, baseUrl, models } = this.config();
+    return { configured: Boolean(apiKey), keySource: apiKey ? keySource : 'none', baseUrl, models };
+  }
+
+  private client(timeoutMs?: number): OpenAI {
+    const { apiKey, baseUrl } = this.config();
+    if (!apiKey) throw new AiError('not_configured', MESSAGES.not_configured);
+    return this.makeClient({ baseUrl, apiKey, timeoutMs });
+  }
+
+  // Free: lists the models this key can call. Proves the key and base URL without spending.
+  async countModels(): Promise<number> {
+    try {
+      const page = await this.client().models.list();
+      return page.data.length;
+    } catch (error) {
+      if (error instanceof AiError) throw error;
+      const status = error instanceof APIError ? error.status ?? null : null;
+      const kind = classify(status, null);
+      throw new AiError(kind, kind === 'failed' ? `Otari could not be reached${status ? ` (HTTP ${status})` : ''}.` : MESSAGES[kind]);
+    }
+  }
+
+  async chat(request: ChatRequest): Promise<ChatResult> {
+    const client = this.client(request.timeoutMs);
+    const started = Date.now();
+    const base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'> = {
+      feature: request.feature, lead_id: request.leadId ?? null, model_requested: request.model,
+    };
+
+    try {
+      const { data, response } = await client.chat.completions.create({
+        model: request.model,
+        messages: request.messages,
+        max_tokens: request.maxTokens,
+        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+      }).withResponse();
+
+      const headers = response.headers;
+      const usage = asObject(data.usage);
+      const details = asObject(usage?.completion_tokens_details);
+      const text = (data.choices[0]?.message?.content ?? '').trim();
+      const activity = recordAiActivity(this.db(), {
+        ...base,
+        model_served: headers.get('otari-model'),
+        provider: headers.get('otari-provider'),
+        fallback: headers.get('otari-fallback') === 'true' ? 1 : 0,
+        attempt_count: asNumber(headers.get('otari-attempt-count')),
+        request_id: headers.get('otari-request-id'),
+        guardrail: guardrailFrom(headers.get('otari-guardrails')),
+        outcome: text ? 'ok' : 'error',
+        http_status: response.status,
+        error_code: text ? null : 'empty_completion',
+        prompt_tokens: asNumber(usage?.prompt_tokens),
+        completion_tokens: asNumber(usage?.completion_tokens),
+        reasoning_tokens: asNumber(details?.reasoning_tokens),
+        // A six-decimal USD string, or null when nothing was priced
+        cost_usd: asNumber(usage?.cost_usd),
+        latency_ms: Date.now() - started,
+      });
+      if (!text) throw new AiError('empty', MESSAGES.empty, activity);
+      return { text, activity };
+    } catch (error) {
+      if (error instanceof AiError) throw error;
+      const apiError = error instanceof APIError ? error : null;
+      const status = apiError?.status ?? null;
+      const code = apiError ? otariErrorCode(apiError.headers, apiError.error) : null;
+      const kind = error instanceof APIConnectionTimeoutError ? 'timeout' : classify(status, code);
+      const activity = recordAiActivity(this.db(), {
+        ...base,
+        model_served: null,
+        provider: null,
+        fallback: 0,
+        attempt_count: null,
+        request_id: apiError?.headers?.get('otari-request-id') ?? null,
+        guardrail: kind === 'blocked' ? 'blocked' : 'not_reported',
+        outcome: OUTCOME[kind],
+        http_status: status,
+        error_code: code ?? (status ? `http_${status}` : 'no_response'),
+        prompt_tokens: null,
+        completion_tokens: null,
+        reasoning_tokens: null,
+        cost_usd: null,
+        latency_ms: Date.now() - started,
+      });
+      const message = kind === 'failed'
+        ? `Otari couldn't complete the request${status ? ` (HTTP ${status})` : ' (no response)'}.`
+        : MESSAGES[kind];
+      throw new AiError(kind, message, activity);
+    }
+  }
+
+  // Arcana → Integrations → Test connection: a free model list, then one tiny call through Model A
+  // so the result shows which model and provider served it and what the guardrail said.
+  async testConnection(): Promise<AiConnectionTest> {
+    let modelCount: number;
+    try {
+      modelCount = await this.countModels();
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error), modelCount: null, served: null };
+    }
+    try {
+      const { activity } = await this.chat({
+        feature: 'connection_test',
+        model: this.config().models.verify,
+        messages: [{ role: 'user', content: 'Reply with the single word: ready' }],
+        maxTokens: 8,
+        timeoutMs: 20_000,
+      });
+      return {
+        ok: true,
+        message: `Connected. ${modelCount} models available; Model A answered.`,
+        modelCount,
+        served: {
+          model: activity.model_served, provider: activity.provider, fallback: activity.fallback === 1,
+          guardrail: activity.guardrail, costUsd: activity.cost_usd, latencyMs: activity.latency_ms,
+        },
+      };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error), modelCount, served: null };
+    }
+  }
+}

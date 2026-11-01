@@ -12,7 +12,8 @@
     "ship": "node scripts/ship.mjs",
     "ship:beta": "node scripts/ship.mjs --beta",
     "lint": "eslint .",
-    "test": "node scripts/run-vitest.mjs"
+    "test": "node scripts/run-vitest.mjs",
+    "otari:probe": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/otari-probe.ts"
   },
   "build": {
     "appId": "com.natri.faber",
@@ -73,6 +74,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^1.55.0",
     "motion": "^14.1.0",
+    "openai": "^7.47.0",
     "playwright": "^1.49.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

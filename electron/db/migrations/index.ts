@@ -8,6 +8,7 @@ import { localityCities } from './006_locality_cities.ts';
 import { chains } from './007_chains.ts';
 import { flagChains } from './008_flag_chains.ts';
 import { pipeline } from './009_pipeline.ts';
+import { aiActivity } from './010_ai_activity.ts';
 
 // Listed explicitly (not read from disk) because main is bundled into one file.
 // Append new migrations at the end; never edit or reorder ones that have shipped.
@@ -21,4 +22,5 @@ export const MIGRATIONS: Migration[] = [
   chains,
   flagChains,
   pipeline,
+  aiActivity,
 ];
