@@ -5,6 +5,7 @@ import { dispatch, type HandlerMap } from './core.ts';
 import { appHandlers } from './app.ts';
 import { authHandlers } from './auth.ts';
 import { settingsHandlers } from './settings.ts';
+import { aiHandlers } from './ai.ts';
 import { backupHandlers } from './backup.ts';
 import { dashboardHandlers, leadsHandlers, paymentsHandlers, projectsHandlers, remindersHandlers } from './crm.ts';
 import { discoveryHandlers, enrichmentHandlers } from './discovery.ts';
@@ -16,6 +17,7 @@ export function createHandlers(ctx: AppContext): HandlerMap {
     ...appHandlers(ctx),
     ...authHandlers(ctx),
     ...settingsHandlers(ctx),
+    ...aiHandlers(ctx),
     ...backupHandlers(ctx),
     ...leadsHandlers(ctx),
     ...projectsHandlers(ctx),

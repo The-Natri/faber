@@ -7,6 +7,7 @@ import { SettingsService, type SecretBox } from './services/settings/index.ts';
 import { NotificationCenter } from './services/notifications/index.ts';
 import { DiscoveryRunner } from './services/discovery/index.ts';
 import { EnrichmentRunner } from './services/enrichment/index.ts';
+import { OtariGateway } from './services/ai/gateway.ts';
 import { startAutoBackup } from './services/backup/index.ts';
 import { purgeExpired } from './services/trash/index.ts';
 import { createHandlers, registerIpc } from './ipc/index.ts';
@@ -166,6 +167,20 @@ app.whenReady().then(async () => {
     },
   });
 
+  // AI through Otari. The key saved in Arcana wins; dev runs fall back to OTARI_API_KEY from the dev
+  // env file, so the packaged app (and Beta, with its own key) only ever uses what was saved there.
+  const ai = new OtariGateway(getDB, () => {
+    const integrations = settings.get('integrations');
+    const saved = settings.getSecret('otariApiKey');
+    const devKey = devEnv.OTARI_API_KEY?.trim() || null;
+    return {
+      apiKey: saved ?? devKey,
+      keySource: saved ? 'settings' : devKey ? 'dev_env' : 'none',
+      baseUrl: integrations.otariBaseUrl,
+      models: { verify: integrations.modelVerify, pitch: integrations.modelPitch, screener: integrations.modelScreener },
+    };
+  });
+
   const ctx: AppContext = {
     db: getDB,
     dbPath: databasePath(),
@@ -177,6 +192,7 @@ app.whenReady().then(async () => {
     notifications,
     discovery,
     enrichment,
+    ai,
     window: () => mainWindow,
     relaunch: () => {
       app.relaunch();

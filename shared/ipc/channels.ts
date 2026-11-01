@@ -19,6 +19,10 @@ export const INVOKE_CHANNELS = [
   'settings:update',
   'settings:setSecret',
 
+  'ai:status',
+  'ai:testConnection',
+  'ai:activity',
+
   'backup:list',
   'backup:create',
   'backup:openFolder',

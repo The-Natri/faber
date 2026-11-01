@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { EventChannel, InvokeChannel } from './channels.ts';
 import { LEAD_STATUSES, LOST_REASONS } from '../pipeline.ts';
 import { SECRET_NAMES, SETTINGS_SECTIONS, type Appearance, type SettingsSection, type SettingsView } from '../settings.ts';
+import type { AiActivityPage, AiConnectionTest, AiStatus } from '../ai.ts';
 import type {
   AppInfo, AppNotification, BackupOverview, BulkResult, ChainPattern, DashboardData, LeadActivity, LeadFacets, DiscoveryResult, DiscoveryState,
   EnrichmentComplete, EnrichmentState, EntityOption, ExportEntity, Lead, Payment, Project,
@@ -77,6 +78,11 @@ export const requestSchemas = {
     values: z.record(z.string(), z.unknown()),
   }),
   'settings:setSecret': z.object({ name: z.enum(SECRET_NAMES), value: z.string().max(500).nullable() }),
+
+  'ai:status': none,
+  // Costs a fraction of a cent: a free model list, then one 8-token call through Model A
+  'ai:testConnection': none,
+  'ai:activity': z.object({ limit: z.number().int().min(1).max(1000).default(200) }),
 
   'backup:list': none,
   'backup:create': none,
@@ -250,6 +256,10 @@ export interface Responses {
   'settings:getAppearance': Appearance;
   'settings:update': SettingsView;
   'settings:setSecret': SettingsView;
+
+  'ai:status': AiStatus;
+  'ai:testConnection': AiConnectionTest;
+  'ai:activity': AiActivityPage;
 
   'backup:list': BackupOverview;
   'backup:create': { name: string };

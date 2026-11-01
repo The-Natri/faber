@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { KeyRound, ScrollText, ShieldCheck, Timer } from 'lucide-react';
+import { KeyRound, PlugZap, ScrollText, ShieldCheck, Sparkles, Timer } from 'lucide-react';
 import { call, errorText } from '../../lib/ipc.ts';
+import { useLoad } from '../../lib/useLoad.ts';
+import { cn, usd } from '../../lib/format.ts';
 import { useSettings } from '../../lib/settings.ts';
-import { Button, Dialog, Field, Input, Select, useToast } from '../../ui/index.ts';
+import { Badge, Button, Dialog, Field, Input, Select, useToast } from '../../ui/index.ts';
+import type { AiConnectionTest } from '../../../shared/ai.ts';
 import { FormError, NewPasswordFields, RecoveryCodePanel, newPasswordProblem } from '../../app/auth/parts.tsx';
 import type { SecretName } from '../../../shared/settings.ts';
 import { SaveBar, SectionPanel, useSectionDraft } from './common.tsx';
@@ -134,9 +137,28 @@ export function IntegrationsSection() {
           Windows secure storage is not available, so keys and tokens cannot be saved on this machine.
         </p>
       )}
-      <SectionPanel title="Claude (AI drafts)" subtitle="Optional. Pitches fall back to your templates without a key." footer={<SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onReset={reset} />}>
-        <SecretField name="claudeApiKey" label="API key" placeholder="sk-ant-…" secret={secrets.claudeApiKey} />
-        <Field label="Model" htmlFor="int-model" className="max-w-sm"><Input id="int-model" value={draft.claudeModel} onChange={(e) => set({ claudeModel: e.target.value })} /></Field>
+      <SectionPanel
+        title="Otari (AI gateway)"
+        subtitle="Optional. AI checks and drafts go through Mozilla.ai's Otari gateway, using open-weight models only. Without a key, Faber falls back to templates."
+        medallion={<Sparkles className="size-5" />}
+        footer={<SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onReset={reset} />}
+      >
+        <SecretField name="otariApiKey" label="Otari API key" placeholder="Paste the key from your Otari workspace" secret={secrets.otariApiKey} />
+        <Field label="Gateway URL" htmlFor="int-otari-url" hint="Hosted EU region by default" className="max-w-xl">
+          <Input id="int-otari-url" className="font-mono text-xs" value={draft.otariBaseUrl} onChange={(e) => set({ otariBaseUrl: e.target.value })} />
+        </Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Model A · checks" htmlFor="int-model-a" hint="Otari routing policy">
+            <Input id="int-model-a" className="font-mono text-xs" value={draft.modelVerify} onChange={(e) => set({ modelVerify: e.target.value })} />
+          </Field>
+          <Field label="Model B · pitches" htmlFor="int-model-b">
+            <Input id="int-model-b" className="font-mono text-xs" value={draft.modelPitch} onChange={(e) => set({ modelPitch: e.target.value })} />
+          </Field>
+          <Field label="Screener" htmlFor="int-model-s" hint="Checks untrusted text first">
+            <Input id="int-model-s" className="font-mono text-xs" value={draft.modelScreener} onChange={(e) => set({ modelScreener: e.target.value })} />
+          </Field>
+        </div>
+        <OtariConnection keySaved={secrets.otariApiKey.set} />
       </SectionPanel>
       <SectionPanel title="Telegram (daily digest)" subtitle="Optional. A bot that sends your morning summary to your phone.">
         <SecretField name="telegramBotToken" label="Bot token" placeholder="123456:ABC…" secret={secrets.telegramBotToken} />
@@ -147,6 +169,57 @@ export function IntegrationsSection() {
           </div>
         </Field>
       </SectionPanel>
+    </div>
+  );
+}
+
+const KEY_SOURCE = {
+  settings: 'Using the key saved here.',
+  dev_env: 'Dev run: using OTARI_API_KEY from the dev env file. A key saved here takes over.',
+  none: 'No key yet, so AI features use templates.',
+} as const;
+
+const GUARDRAIL_LABEL = { passed: 'passed', blocked: 'blocked', not_reported: 'not reported' } as const;
+
+// Test connection: a free model list, then one 8-token call through Model A (a fraction of a cent).
+// The result names the model and provider that served it, so a fallback shows up here too.
+function OtariConnection({ keySaved }: { keySaved: boolean }) {
+  const status = useLoad(() => call('ai:status'), keySaved);
+  const [result, setResult] = useState<AiConnectionTest | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const test = async () => {
+    setBusy(true);
+    try {
+      setResult(await call('ai:testConnection'));
+    } catch (err) {
+      setResult({ ok: false, message: errorText(err), modelCount: null, served: null });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-ink-muted">{status.data ? KEY_SOURCE[status.data.keySource] : ' '}</p>
+        <Button icon={<PlugZap className="size-4" />} loading={busy} disabled={!status.data?.configured} onClick={() => void test()}>Test connection</Button>
+      </div>
+      {result && (
+        <div role="status" className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
+          <p className={cn('font-medium', result.ok ? 'text-st-won' : 'text-st-lost')}>{result.message}</p>
+          {result.served && (
+            <div className="flex flex-wrap gap-1.5">
+              <Badge>Served by {result.served.model ?? 'unknown'}</Badge>
+              <Badge>on {result.served.provider ?? 'unknown'}</Badge>
+              <Badge>{result.served.fallback ? 'Fallback used' : 'No fallback'}</Badge>
+              <Badge>Guardrail {GUARDRAIL_LABEL[result.served.guardrail]}</Badge>
+              <Badge>{usd(result.served.costUsd)}</Badge>
+              <Badge>{result.served.latencyMs} ms</Badge>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_MODELS, OTARI_EU_BASE_URL } from './ai.ts';
 
 // Each section is stored as one JSON value in app_settings under its section name.
 // Every field has a default, so a missing or partial section always parses.
@@ -56,8 +57,15 @@ export const outreachSchema = z.object({
   defaultLanguage: z.enum(['en', 'ta']).default('en'),
 });
 
+// AI goes through the Otari gateway (shared/ai.ts). Each model field names a routing policy or a
+// catalog id, all open-weight.
+const modelName = (fallback: string) => z.string().trim().min(1).max(120).default(fallback);
+
 export const integrationsSchema = z.object({
-  claudeModel: z.string().trim().min(1).max(100).default('claude-haiku-5-5'),
+  otariBaseUrl: z.url({ protocol: /^https$/, message: 'The Otari base URL should start with https://' }).default(OTARI_EU_BASE_URL),
+  modelVerify: modelName(DEFAULT_MODELS.verify),
+  modelPitch: modelName(DEFAULT_MODELS.pitch),
+  modelScreener: modelName(DEFAULT_MODELS.screener),
   telegramChatId: z.string().trim().max(40).default(''),
 });
 
@@ -85,7 +93,7 @@ export type AppSettings = { [K in SettingsSection]: z.output<(typeof SETTINGS_SC
 export type Appearance = AppSettings['appearance'];
 export type ThemeName = z.output<typeof themeSchema>;
 
-export const SECRET_NAMES = ['claudeApiKey', 'telegramBotToken'] as const;
+export const SECRET_NAMES = ['otariApiKey', 'telegramBotToken'] as const;
 export type SecretName = (typeof SECRET_NAMES)[number];
 
 // What the renderer sees for a stored secret: never the value itself

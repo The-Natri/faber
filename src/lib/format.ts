@@ -6,6 +6,12 @@ export function rupees(amount: number | null | undefined): string {
   return `₹${(amount ?? 0).toLocaleString('en-IN')}`;
 }
 
+// AI costs are fractions of a cent, so dollars keep up to six decimals: "$0.000073"
+export function usd(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) return '—';
+  return `$${amount.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.00')}`;
+}
+
 export function todayString(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

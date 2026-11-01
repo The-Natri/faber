@@ -40,8 +40,26 @@ describe('SettingsService', () => {
     expect(settings.security.autoLockMinutes).toBe(15);
     expect(settings.appearance.theme).toBe('nocturne');
     expect(settings.outreach).toEqual({ followUpDays: [3, 7, 14], dailyGoal: 10, defaultLanguage: 'en' });
-    expect(settings.integrations.claudeModel).toBe('claude-haiku-5-5');
+    expect(settings.integrations).toEqual({
+      otariBaseUrl: 'https://eu.api.otari.ai/api/v1',
+      modelVerify: 'faber-verify',
+      modelPitch: 'deepseek/deepseek-v4-pro',
+      modelScreener: 'openai/gpt-oss-safeguard-20b',
+      telegramChatId: '',
+    });
     expect(settings.backups).toEqual({ folder: null, keep: 14 });
+  });
+
+  it('reads integrations saved before the Otari switch, dropping the old Claude model', () => {
+    db.prepare(`INSERT INTO app_settings (key, value) VALUES ('integrations', ?)`).run(JSON.stringify({ claudeModel: 'claude-haiku-5-5', telegramChatId: '42' }));
+    const integrations = new SettingsService(db, fakeBox()).get('integrations');
+    expect(integrations).toMatchObject({ modelVerify: 'faber-verify', telegramChatId: '42' });
+    expect(integrations).not.toHaveProperty('claudeModel');
+  });
+
+  it('only accepts an https Otari base URL', () => {
+    const service = new SettingsService(db, fakeBox());
+    expect(() => service.update('integrations', { otariBaseUrl: 'http://eu.api.otari.ai/api/v1' })).toThrow(/https/);
   });
 
   it('merges updates into a section and persists them', () => {
@@ -74,15 +92,15 @@ describe('SettingsService', () => {
 
   it('stores secrets encrypted and only ever shows them masked', () => {
     const service = new SettingsService(db, fakeBox());
-    const view = service.setSecret('claudeApiKey', 'sk-ant-1234567890abcd');
+    const view = service.setSecret('otariApiKey', 'fake-otari-key-1234567890abcd');
 
-    expect(view.secrets.claudeApiKey).toEqual({ set: true, masked: '••••••••abcd' });
-    expect(JSON.stringify(view)).not.toContain('sk-ant');
-    const stored = db.prepare(`SELECT value FROM app_settings WHERE key = 'secret:claudeApiKey'`).get() as { value: string };
-    expect(stored.value).not.toContain('sk-ant');
-    expect(service.getSecret('claudeApiKey')).toBe('sk-ant-1234567890abcd');
+    expect(view.secrets.otariApiKey).toEqual({ set: true, masked: '••••••••abcd' });
+    expect(JSON.stringify(view)).not.toContain('fake-otari');
+    const stored = db.prepare(`SELECT value FROM app_settings WHERE key = 'secret:otariApiKey'`).get() as { value: string };
+    expect(stored.value).not.toContain('fake-otari');
+    expect(service.getSecret('otariApiKey')).toBe('fake-otari-key-1234567890abcd');
 
-    expect(service.setSecret('claudeApiKey', null).secrets.claudeApiKey).toEqual({ set: false, masked: '' });
+    expect(service.setSecret('otariApiKey', null).secrets.otariApiKey).toEqual({ set: false, masked: '' });
   });
 
   it('refuses to store secrets without secure storage and treats unreadable ones as unset', () => {

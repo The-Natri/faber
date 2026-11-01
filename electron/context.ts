@@ -5,6 +5,7 @@ import type { SettingsService } from './services/settings/index.ts';
 import type { NotificationCenter } from './services/notifications/index.ts';
 import type { DiscoveryRunner } from './services/discovery/index.ts';
 import type { EnrichmentRunner } from './services/enrichment/index.ts';
+import type { OtariGateway } from './services/ai/gateway.ts';
 
 // Everything the IPC handlers need, created once in main.ts
 export interface AppContext {
@@ -18,6 +19,7 @@ export interface AppContext {
   notifications: NotificationCenter;
   discovery: DiscoveryRunner;
   enrichment: EnrichmentRunner;
+  ai: OtariGateway;
   window: () => BrowserWindow | null;
   relaunch: () => void;
 }
