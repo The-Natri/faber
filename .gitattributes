@@ -1,0 +1,2 @@
+# Brand files stay byte-for-byte as delivered (no line-ending conversion)
+assets/brand/** -text

@@ -1,0 +1,463 @@
+@import "tailwindcss";
+
+/* ── Arcane Workshop tokens ─────────────────────────────────────────────────
+   docs/design/DESIGN_REFERENCE.md §4 (approved). Two themes on <html data-theme>.
+   Every text/background pair is measured ≥ 4.5:1.                               */
+
+:root,
+[data-theme="nocturne"] {
+  color-scheme: dark;
+  --bg: #07101C;
+  --bg-elev: #0C1828;
+  --surface: #112237;
+  --surface-2: #172B44;
+  --border: #2A3D57;
+  --ink: #F1E6D2;
+  --ink-muted: #A9A08F;
+  --gold: #D9A55B;            /* candle amber */
+  --gold-bright: #F0C27A;
+  --gold-ink: #F0C27A;        /* gold used as text */
+  --accent: #D9A55B;          /* primary button fill */
+  --on-accent: #160E05;
+  --focus: #F0C27A;
+  --scrim: rgba(2, 6, 12, 0.7);
+  --grain-opacity: 0.045;
+
+  --gilt-a: #B88A4A;
+  --gilt-b: #F0C27A;
+  --parchment: #F2DDB8;
+  --parchment-ink: #2A1E12;
+  --parchment-muted: #6B5537;
+  --wax: #7A2A2A;
+  --ember: #E07B39;
+  --success: #4FB39C;
+  --success-fill: #1F6B5D;
+  --danger-fill: #8A3129;
+  --glass: linear-gradient(180deg, rgba(23, 43, 68, 0.92), rgba(12, 24, 40, 0.94));
+
+  --st-new: #779CDC;
+  --st-contacted: #DB9036;
+  --st-replied: #AA91E2;
+  --st-meeting: #4BB1B1;
+  --st-proposal: #CD8AC1;
+  --st-won: #59B189;
+  --st-lost: #D08A90;
+  --st-warn: #DB9036;
+
+  --map-filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(0.92) sepia(0.32) saturate(0.7);
+}
+
+[data-theme="parchment"] {
+  color-scheme: light;
+  --bg: #EBDCBC;
+  --bg-elev: #F3E7CC;
+  --surface: #FAF1DC;
+  --surface-2: #F1E2C2;
+  --border: #C9AE7E;
+  --ink: #2A1E12;
+  --ink-muted: #65503A;
+  --gold: #9C7A1E;
+  --gold-bright: #B8902A;
+  --gold-ink: #7A5512;
+  --accent: #7A5512;
+  --on-accent: #FAF1DC;
+  --focus: #7A5512;
+  --scrim: rgba(42, 30, 18, 0.42);
+  --grain-opacity: 0.07;
+
+  --gilt-a: #9C7A1E;
+  --gilt-b: #C9A24A;
+  --parchment: #FBF3E0;
+  --parchment-ink: #2A1E12;
+  --parchment-muted: #65503A;
+  --wax: #8A2F2F;
+  --ember: #B4581F;
+  --success: #1E6B5A;
+  --success-fill: #1F6B5D;
+  --danger-fill: #8A3129;
+  --glass: linear-gradient(180deg, rgba(250, 241, 220, 0.96), rgba(243, 231, 204, 0.97));
+
+  --st-new: #345A9C;
+  --st-contacted: #81501A;
+  --st-replied: #604896;
+  --st-meeting: #19615F;
+  --st-proposal: #754A6E;
+  --st-won: #1D6544;
+  --st-lost: #952E37;
+  --st-warn: #81501A;
+
+  --map-filter: sepia(0.5) saturate(0.7) brightness(1) contrast(0.95);
+}
+
+/* Base status hues from the brief (fills, map pins, bars) */
+:root {
+  --hue-new: #4A7BD0;
+  --hue-contacted: #D98A2B;
+  --hue-replied: #8E6CD9;
+  --hue-meeting: #2BA3A3;
+  --hue-proposal: #C77DBA;
+  --hue-won: #2F9E6B;
+  --hue-lost: #A3333D;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-frame: 4px;
+  --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-raised: 0 16px 44px rgba(0, 0, 0, 0.55);
+  --glow-gold: 0 0 0 1px var(--gold), 0 0 18px rgba(240, 194, 122, 0.28);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-gold: var(--gold);
+  --color-gold-bright: var(--gold-bright);
+  --color-gold-ink: var(--gold-ink);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-parchment: var(--parchment);
+  --color-parchment-ink: var(--parchment-ink);
+  --color-parchment-muted: var(--parchment-muted);
+  --color-wax: var(--wax);
+  --color-ember: var(--ember);
+  --color-success: var(--success);
+  --color-success-fill: var(--success-fill);
+  --color-danger-fill: var(--danger-fill);
+
+  --color-st-new: var(--st-new);
+  --color-st-contacted: var(--st-contacted);
+  --color-st-replied: var(--st-replied);
+  --color-st-meeting: var(--st-meeting);
+  --color-st-proposal: var(--st-proposal);
+  --color-st-won: var(--st-won);
+  --color-st-lost: var(--st-lost);
+  --color-st-warn: var(--st-warn);
+
+  --color-hue-new: var(--hue-new);
+  --color-hue-contacted: var(--hue-contacted);
+  --color-hue-won: var(--hue-won);
+  --color-hue-lost: var(--hue-lost);
+
+  --font-display: "Cinzel", Georgia, serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Compact density scales every rem-based size down a step */
+html[data-density="compact"] {
+  font-size: 14.5px;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--surface) 55%, transparent) 0%, transparent 60%);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Subtle grain (inline SVG noise, no image files) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--gold) 35%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+[data-theme="parchment"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.2);
+}
+
+/* Press feedback for every button and card */
+button:not(:disabled):active,
+[role="button"]:active {
+  transform: scale(0.975);
+}
+button,
+[role="button"] {
+  transition-property: transform, background-color, border-color, color, box-shadow, filter;
+  transition-duration: 150ms;
+}
+
+/* Component classes live in a layer so Tailwind utilities (fixed, absolute, …) can override them */
+@layer components {
+/* ── Surfaces and ornaments ───────────────────────────────────────────────── */
+
+/* Navy glass panel (showcase panels) */
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-panel), inset 0 1px 0 color-mix(in oklab, var(--gilt-b) 14%, transparent);
+}
+
+/* Parchment sheet: drawers, scrolls, ledgers. Text inside uses parchment-ink. */
+.parchment {
+  background-color: var(--parchment);
+  background-image:
+    radial-gradient(120% 120% at 50% 40%, transparent 55%, rgba(120, 80, 30, 0.14) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.3 0 0 0 0 0.12 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+  color: var(--parchment-ink);
+}
+
+/* Gilt double rule with corner brackets (major panels, frames) */
+.gilt {
+  position: relative;
+  border: 1.5px solid color-mix(in oklab, var(--gilt-a) 85%, transparent);
+  box-shadow: inset 0 0 0 3px transparent, inset 0 0 0 4px color-mix(in oklab, var(--gilt-b) 30%, transparent), var(--shadow-panel);
+}
+.gilt::before,
+.gilt::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border-color: var(--gilt-b);
+  border-style: solid;
+}
+.gilt::before {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+  border-top-left-radius: var(--radius-sm);
+}
+.gilt::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 2px 2px 0;
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Kept for existing panels */
+.flourish {
+  position: relative;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px color-mix(in oklab, var(--gold) 35%, transparent);
+}
+.flourish::before,
+.flourish::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--gold);
+  border-style: solid;
+  pointer-events: none;
+  opacity: 0.8;
+}
+.flourish::before { top: 6px; left: 6px; border-width: 1px 0 0 1px; }
+.flourish::after { bottom: 6px; right: 6px; border-width: 0 1px 1px 0; }
+
+/* Brand mark (BrandMark variant="auto"): the navy-disc mark on dark surfaces, the transparent
+   mark on parchment surfaces and in the parchment theme */
+.brand-mark-light { display: none; }
+[data-theme="parchment"] .brand-mark-dark,
+.on-parchment .brand-mark-dark { display: none; }
+[data-theme="parchment"] .brand-mark-light,
+.on-parchment .brand-mark-light { display: inline-block; }
+
+/* Wooden plank header (Forge columns, Codex board) */
+.plank {
+  background:
+    linear-gradient(180deg, rgba(255, 220, 160, 0.08), transparent 40%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #3B2617, #24160D);
+  border-bottom: 1.5px solid var(--gilt-a);
+  color: #F3DFC0;
+}
+
+/* Hover lift + gold sheen for interactive cards */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, color-mix(in oklab, var(--gold-bright) 16%, transparent) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+.sheen:hover::after {
+  animation: sheen 700ms ease-out;
+}
+.lift {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised);
+}
+
+/* Glows (pre-composed; only their opacity changes) */
+.glow-danger {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--hue-lost) 70%, transparent), 0 0 18px rgba(200, 60, 60, 0.32);
+}
+.glow-ember {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--ember) 60%, transparent), 0 0 16px rgba(224, 123, 57, 0.28);
+}
+
+}
+
+/* ── Keyframes (transform and opacity only) ───────────────────────────────── */
+
+@keyframes sheen { to { transform: translateX(120%); } }
+@keyframes flicker {
+  0%, 100% { transform: scale(1, 1) translateY(0); opacity: 1; }
+  20% { transform: scale(0.94, 1.06) translateY(-0.5px); opacity: 0.92; }
+  45% { transform: scale(1.05, 0.95) translateY(0.4px); opacity: 1; }
+  70% { transform: scale(0.97, 1.03) translateY(-0.3px); opacity: 0.95; }
+}
+@keyframes halo { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.8; } }
+@keyframes drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-120px, -60px, 0); } }
+@keyframes mote {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  15% { opacity: 0.7; }
+  85% { opacity: 0.5; }
+  100% { transform: translate3d(var(--mx, 30px), var(--my, -90px), 0); opacity: 0; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin-rev { to { transform: rotate(-360deg); } }
+@keyframes smoke {
+  0% { transform: translate3d(0, 6px, 0) scale(0.8); opacity: 0; }
+  30% { opacity: 0.45; }
+  100% { transform: translate3d(var(--sx, 8px), -26px, 0) scale(1.35); opacity: 0; }
+}
+@keyframes seal-glow { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.85; } }
+@keyframes pill-shimmer { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
+@keyframes quill-write {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(1.5px, 1px) rotate(-6deg); }
+  50% { transform: translate(3px, 0) rotate(2deg); }
+  75% { transform: translate(1.5px, 1px) rotate(-4deg); }
+}
+@keyframes ink-dot { 0% { transform: scale(0); opacity: 0; } 40% { opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes shudder {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-7px) rotate(-0.4deg); }
+  35% { transform: translateX(6px) rotate(0.3deg); }
+  55% { transform: translateX(-4px); }
+  75% { transform: translateX(3px); }
+}
+@keyframes blot { from { transform: scale(0.1); opacity: 0.9; } to { transform: scale(1); opacity: 0.85; } }
+@keyframes ink-blot { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ── Map ──────────────────────────────────────────────────────────────────── */
+
+.faber-map .leaflet-tile-pane { filter: var(--map-filter); }
+.faber-map.leaflet-container { background: var(--bg-elev); font-family: var(--font-sans); }
+.faber-pin { background: none; border: none; }
+.faber-pin > div {
+  animation: ink-blot 380ms cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+  transform-origin: 50% 100%;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip { background: var(--surface); color: var(--ink); border: 1px solid var(--border); }
+.leaflet-container a.leaflet-popup-close-button { color: var(--ink-muted); }
+.leaflet-control-attribution { background: color-mix(in oklab, var(--bg) 80%, transparent) !important; color: var(--ink-muted) !important; }
+.leaflet-control-attribution a { color: var(--gold-ink) !important; }
+.leaflet-bar a { background: var(--surface) !important; color: var(--ink) !important; border-color: var(--border) !important; }
+
+/* ── Theme change: night ↔ dawn crossfade (View Transitions, opacity only) ── */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 900ms;
+  animation-timing-function: ease-in-out;
+}
+
+/* ── Motion off: hidden window pauses decoration; Reduce motion removes it ── */
+
+html[data-hidden="true"] *,
+html[data-hidden="true"] *::before,
+html[data-hidden="true"] *::after {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .decor { display: none !important; }
+}
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation: none !important;
+  transition-duration: 1ms !important;
+}
+[data-reduce-motion="true"] .decor { display: none !important; }
+
+@layer components {
+/* Content on a parchment sheet: remap the tokens so every existing component (labels,
+   inputs, buttons, errors) renders in ink-on-paper colours. Checked ≥ 4.5:1. */
+.on-parchment {
+  color-scheme: light;
+  color: var(--parchment-ink);
+  --ink: var(--parchment-ink);
+  --ink-muted: var(--parchment-muted);
+  --bg: rgba(255, 250, 236, 0.62);
+  --bg-elev: rgba(255, 250, 236, 0.62);
+  --surface: #FBF3E0;
+  --surface-2: rgba(122, 85, 18, 0.1);
+  --border: #B8966A;
+  --gold: #9C7A1E;
+  --gold-ink: #6E4C0F;
+  --accent: #6E4C0F;
+  --on-accent: #FBF3E0;
+  --focus: #6E4C0F;
+  --st-lost: #952E37;
+  --st-contacted: #81501A;
+  --st-won: #1D6544;
+  --success: #1E6B5A;
+}
+}

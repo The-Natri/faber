@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+release/
+
+# Environment (contains credentials — never commit)
+.env
+
+# Database (contains your personal data — never commit)
+*.db
+*.db-wal
+*.db-shm
+
+# Playwright browser binaries
+ms-playwright/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Design reference images (kept locally, not in git)
+docs/*.png
+docs/*.jpg
+docs/*.jpeg
+docs/*.webp
