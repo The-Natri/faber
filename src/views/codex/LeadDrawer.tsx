@@ -1,11 +1,13 @@
 import { useState, type KeyboardEvent } from 'react';
-import { Ban, Check, Globe, Pencil, Phone, Plus, RotateCcw, Star, Trash2, Undo2, X } from 'lucide-react';
-import { call } from '../../lib/ipc.ts';
-import { cn, formatDateTime } from '../../lib/format.ts';
+import { Ban, Check, Globe, Pencil, Phone, Plus, RotateCcw, Sparkles, Star, Trash2, Undo2, X } from 'lucide-react';
+import { call, errorText } from '../../lib/ipc.ts';
+import { cn, formatDateTime, usd } from '../../lib/format.ts';
 import { useLoad } from '../../lib/useLoad.ts';
-import { Button, Checkbox, ConfirmDialog, Drawer, IconButton, Input, ScoreSeal, Skeleton, StatusPill, Textarea } from '../../ui/index.ts';
+import { Button, Checkbox, ConfirmDialog, Drawer, IconButton, Input, ScoreSeal, Skeleton, StatusPill, Textarea, useToast } from '../../ui/index.ts';
 import { canMove, LOST_REASON_LABEL, STAGE_LABEL, STAGES, type LeadStatus } from '../../../shared/pipeline.ts';
 import type { Lead, LeadActivity } from '../../../shared/types.ts';
+import type { NameMatchSuggestion } from '../../../shared/ai.ts';
+import { VERDICT_LABEL, WebsiteBadge } from './WebsiteBadge.tsx';
 
 export interface LeadActions {
   move: (lead: Lead, to: LeadStatus) => void;
@@ -16,6 +18,8 @@ export interface LeadActions {
   edit: (lead: Lead) => void;
   setStar: (lead: Lead, starred: boolean) => Promise<void>;
   setTags: (lead: Lead, tags: string[]) => Promise<void>;
+  // Reloads the list and this lead after something changed it in main (an AI check, a name check)
+  refresh: () => Promise<void>;
 }
 
 // Small pill for flagged leads in lists
@@ -239,18 +243,17 @@ function LeadDetail({ lead, actions, tagSuggestions }: { lead: Lead; actions: Le
           <dt className="text-xs text-ink-muted">Address</dt>
           <dd className="mt-0.5 text-ink">{lead.address || 'No address provided'}</dd>
         </div>
-        {lead.website_url && (
-          <div className="col-span-2">
-            <dt className="text-xs text-ink-muted">Website</dt>
-            <dd className="mt-0.5"><a href={lead.website_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-gold-ink hover:underline"><Globe className="size-3.5" />{lead.website_url}</a></dd>
-          </div>
-        )}
+        <div className="col-span-2">
+          <WebsitePanel lead={lead} onChanged={actions.refresh} />
+        </div>
         <Detail label="Source" value={lead.source.toUpperCase()} />
         <Detail label="Enrichment" value={lead.enrichment_status} />
         <Detail label="Discovered" value={formatDateTime(lead.discovered_at) || 'N/A'} />
         <Detail label="Last contacted" value={formatDateTime(lead.last_contacted_at) || 'Not yet'} />
         {lead.rating != null && <Detail label="Google rating" value={`${lead.rating}★${lead.review_count ? ` · ${lead.review_count} reviews` : ''}`} />}
       </dl>
+
+      {lead.enrichment_status === 'review' && <NameCheckPanel lead={lead} onChanged={actions.refresh} />}
 
       <TagEditor tags={lead.tags} suggestions={tagSuggestions} onChange={(tags) => actions.setTags(lead, tags)} />
 
@@ -292,6 +295,123 @@ function LeadDetail({ lead, actions, tagSuggestions }: { lead: Lead; actions: Le
           label={<span>Also add <span className="font-semibold text-ink">“{lead.name}”</span> to the chain blocklist, flagging other leads with that name</span>}
         />
       </ConfirmDialog>
+    </div>
+  );
+}
+
+// The AI website check: Model A's verdict, its reason and evidence, and a button to (re)check.
+// Without a website_url it costs one Otari web search; with one, Faber reads that page itself.
+function WebsitePanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<void> }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const checked = lead.website_checked_at !== null;
+
+  const check = async () => {
+    setBusy(true);
+    try {
+      const result = await call('ai:checkWebsite', { leadId: lead.id });
+      if (result.error) {
+        toast({ title: 'Website not checked', description: result.error, tone: 'error' });
+      } else {
+        toast({ title: VERDICT_LABEL[result.verdict], description: `${result.reason || lead.name} · ${usd(result.costUsd)}`, tone: 'success' });
+      }
+      await onChanged();
+    } catch (err) {
+      toast({ title: 'Website not checked', description: errorText(err), tone: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-ink-muted">Website</span>
+        <WebsiteBadge lead={lead} />
+        <Button size="sm" variant="ghost" className="ml-auto" icon={<Globe className="size-3.5" />} loading={busy}
+          title={lead.website_url ? 'Faber reads the site itself; about $0.001' : 'One Otari web search plus small model calls; about $0.011'}
+          onClick={() => void check()}>
+          {checked ? 'Check again' : 'Check website'}
+        </Button>
+      </div>
+      {lead.website_url && (
+        <a href={lead.website_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 break-all text-sm text-gold-ink hover:underline">
+          <Globe className="size-3.5 shrink-0" />{lead.website_url}
+        </a>
+      )}
+      {checked && (
+        <p className="text-sm text-ink">
+          {lead.website_reason || 'No reason given.'}
+          {lead.website_evidence && lead.website_evidence !== lead.website_url && (
+            <> <a href={lead.website_evidence} target="_blank" rel="noreferrer" className="break-all text-gold-ink hover:underline">Evidence</a></>
+          )}
+          <span className="block text-xs text-ink-muted tabular">Checked {formatDateTime(lead.website_checked_at)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Enrichment flagged this lead because its Google Maps name didn't match. Model A suggests; you decide.
+function NameCheckPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<void> }) {
+  const toast = useToast();
+  const [suggestion, setSuggestion] = useState<NameMatchSuggestion | null>(null);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState<'suggest' | 'match' | 'no_match' | null>(null);
+
+  const suggest = async () => {
+    setBusy('suggest');
+    try {
+      const next = await call('ai:suggestNameMatch', { leadId: lead.id });
+      setSuggestion(next);
+      setName(next.suggestedName ?? lead.name);
+    } catch (err) {
+      toast({ title: 'Name check failed', description: errorText(err), tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resolve = async (decision: 'match' | 'no_match') => {
+    setBusy(decision);
+    try {
+      await call('leads:resolveReview', { id: lead.id, decision, ...(decision === 'match' ? { name } : {}) });
+      toast({ title: decision === 'match' ? 'Confirmed: queued for enrichment again' : 'Marked as a different business', tone: 'success' });
+      await onChanged();
+    } catch (err) {
+      toast({ title: 'Could not save the decision', description: errorText(err), tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-bg-elev px-3.5 py-3">
+      <div className="text-sm">
+        <div className="font-medium text-ink">Name check needed</div>
+        <div className="text-xs text-ink-muted">Google Maps showed a different name for this place. Is it the same business?</div>
+      </div>
+      {!suggestion ? (
+        <Button size="sm" className="self-start" icon={<Sparkles className="size-3.5" />} loading={busy === 'suggest'}
+          title="One Otari web search plus small model calls; about $0.011" onClick={() => void suggest()}>
+          Suggest with AI
+        </Button>
+      ) : (
+        <>
+          <p className="text-sm text-ink">
+            <span className="font-semibold">{suggestion.decision === 'match' ? 'Looks like a match' : suggestion.decision === 'no_match' ? 'Looks like a different business' : 'Not sure'}</span>
+            {suggestion.reason && <> · {suggestion.reason}</>}
+            {suggestion.evidenceUrl && <> <a href={suggestion.evidenceUrl} target="_blank" rel="noreferrer" className="text-gold-ink hover:underline">Evidence</a></>}
+            <span className="block text-xs text-ink-muted tabular">AI suggestion, {usd(suggestion.costUsd)}. Nothing changes until you choose.</span>
+          </p>
+          <label htmlFor="name-check-name" className="text-xs text-ink-muted">Name to keep if it's a match</label>
+          <Input id="name-check-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" icon={<Check className="size-3.5" />} disabled={!name.trim()} loading={busy === 'match'} onClick={() => void resolve('match')}>Confirm match</Button>
+            <Button size="sm" variant="ghost" loading={busy === 'no_match'} onClick={() => void resolve('no_match')}>Not the same business</Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

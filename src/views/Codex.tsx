@@ -9,6 +9,8 @@ import { Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, IconButt
 import { STAGE_LABEL, type LeadStatus, type LostReason } from '../../shared/pipeline.ts';
 import { DEFAULT_LEAD_FILTERS, type BulkLeadAction, type Lead, type LeadFilters as Filters } from '../../shared/types.ts';
 import { EnrichmentBar } from './codex/EnrichmentBar.tsx';
+import { WebsiteCheckBar } from './codex/WebsiteCheckBar.tsx';
+import { WebsiteBadge } from './codex/WebsiteBadge.tsx';
 import { LeadMap } from './codex/LeadMap.tsx';
 import { ChainPill, LeadDrawer, type LeadActions } from './codex/LeadDrawer.tsx';
 import { LeadFilters, stagesOf } from './codex/LeadFilters.tsx';
@@ -173,6 +175,7 @@ export default function Codex({ request }: ViewProps) {
       }
     },
     edit: (lead) => setForm({ open: true, lead }),
+    refresh,
     setStar: async (lead, starred) => { await run(() => call('leads:setStar', { id: lead.id, starred }), 'Could not update the star'); },
     setTags: async (lead, tags) => { await run(() => call('leads:setTags', { id: lead.id, tags }), 'Could not save the tags'); },
     markNotAFit: async (lead, addToBlocklist) => {
@@ -237,6 +240,7 @@ export default function Codex({ request }: ViewProps) {
     <div className="flex h-full">
       <aside className={cn('flex h-full flex-col border-r border-border bg-surface', view === 'list' ? 'w-[40%] min-w-[420px]' : 'w-[340px] shrink-0')}>
         <EnrichmentBar pending={pending} onFinished={() => void refresh()} />
+        <WebsiteCheckBar onFinished={() => void refresh()} />
 
         {/* Filters, bulk bar and list scroll together so open filters never squeeze the list */}
         <div className="flex-1 overflow-y-auto">
@@ -347,6 +351,7 @@ function LeadRow({ lead, selected, checked, onSelect, onCheck, onStar }: {
           <span className={`truncate text-sm font-medium ${selected ? 'text-gold-ink' : 'text-ink'}`}>{lead.name}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             {lead.is_chain === 1 && <ChainPill lead={lead} />}
+            <WebsiteBadge lead={lead} />
             <StatusPill status={lead.status}>{STAGE_LABEL[lead.status]}</StatusPill>
           </span>
         </div>

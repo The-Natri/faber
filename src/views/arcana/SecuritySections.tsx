@@ -158,6 +158,16 @@ export function IntegrationsSection() {
             <Input id="int-model-s" className="font-mono text-xs" value={draft.modelScreener} onChange={(e) => set({ modelScreener: e.target.value })} />
           </Field>
         </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Website checks per batch" htmlFor="int-batch" hint="1–20; about $0.011 each">
+            <Input id="int-batch" type="number" min={1} max={20} className="tabular" value={draft.websiteBatchSize}
+              onChange={(e) => set({ websiteBatchSize: Number(e.target.value) })} />
+          </Field>
+          <Field label="Pause between leads" htmlFor="int-delay" hint="Seconds">
+            <Input id="int-delay" type="number" min={0} max={60} className="tabular" value={draft.websiteDelaySeconds}
+              onChange={(e) => set({ websiteDelaySeconds: Number(e.target.value) })} />
+          </Field>
+        </div>
         <OtariConnection keySaved={secrets.otariApiKey.set} />
       </SectionPanel>
       <SectionPanel title="Telegram (daily digest)" subtitle="Optional. A bot that sends your morning summary to your phone.">
