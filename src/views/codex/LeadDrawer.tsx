@@ -6,7 +6,8 @@ import { useLoad } from '../../lib/useLoad.ts';
 import { Button, Checkbox, ConfirmDialog, Drawer, IconButton, Input, ScoreSeal, Skeleton, StatusPill, Textarea, useToast } from '../../ui/index.ts';
 import { canMove, LOST_REASON_LABEL, STAGE_LABEL, STAGES, type LeadStatus } from '../../../shared/pipeline.ts';
 import type { Lead, LeadActivity } from '../../../shared/types.ts';
-import type { NameMatchSuggestion } from '../../../shared/ai.ts';
+import type { NameMatchSuggestion, PitchDraft } from '../../../shared/ai.ts';
+import { whatsAppLink } from '../../../shared/phone.ts';
 import { VERDICT_LABEL, WebsiteBadge } from './WebsiteBadge.tsx';
 
 export interface LeadActions {
@@ -255,6 +256,8 @@ function LeadDetail({ lead, actions, tagSuggestions }: { lead: Lead; actions: Le
 
       {lead.enrichment_status === 'review' && <NameCheckPanel lead={lead} onChanged={actions.refresh} />}
 
+      {!flagged && <PitchPanel lead={lead} onChanged={actions.refresh} />}
+
       <TagEditor tags={lead.tags} suggestions={tagSuggestions} onChange={(tags) => actions.setTags(lead, tags)} />
 
       <div className="flex flex-col gap-2">
@@ -416,6 +419,109 @@ function NameCheckPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Prom
             </Button>
             <Button size="sm" variant="ghost" loading={busy === 'no_match'} onClick={() => void resolve('no_match')}>Not the same business</Button>
           </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Missives, first touch: an AI draft (Model B through faber-pitch) or the built-in template, which you
+// edit, copy or open in WhatsApp. Faber never sends; a contact counts only when you confirm it was sent.
+function PitchPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<void> }) {
+  const toast = useToast();
+  const [draft, setDraft] = useState<PitchDraft | null>(null);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [askSent, setAskSent] = useState(false);
+  const message = draft ? [body.trim(), draft.signOff].filter(Boolean).join('\n\n') : '';
+
+  const generate = async () => {
+    setBusy(true);
+    setAskSent(false);
+    try {
+      const next = await call('ai:draftPitch', { leadId: lead.id });
+      setDraft(next);
+      setBody(next.body);
+    } catch (err) {
+      toast({ title: 'No draft', description: errorText(err), tone: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      toast({ title: 'Message copied', tone: 'success' });
+    } catch {
+      toast({ title: 'Could not copy', tone: 'error' });
+    }
+  };
+
+  const confirmSent = async () => {
+    try {
+      await call('leads:logContact', { id: lead.id, channel: 'whatsapp', note: `WhatsApp pitch (${draft?.source === 'template' ? 'template' : 'AI draft'})` });
+      setAskSent(false);
+      toast({ title: 'Contact logged', description: lead.status === 'new' ? `${lead.name} moved to Contacted.` : lead.name, tone: 'success' });
+      await onChanged();
+    } catch (err) {
+      toast({ title: 'Could not log the contact', description: errorText(err), tone: 'error' });
+    }
+  };
+
+  const servedBy = draft?.source === 'ai'
+    ? `AI draft · ${draft.servedModel ?? 'unknown model'}${draft.provider ? ` on ${draft.provider}` : ''}${draft.fallback ? ' · fallback model used' : ''} · ${usd(draft.costUsd)}`
+    : draft ? 'Built-in template' : '';
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-bg-elev px-3.5 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-medium text-ink">WhatsApp pitch</div>
+        <Button size="sm" variant={draft ? 'ghost' : 'primary'} icon={<Sparkles className="size-3.5" />} loading={busy}
+          title="Model B through Otari, about $0.0003; the built-in template if Otari is unavailable" onClick={() => void generate()}>
+          {draft ? 'Regenerate' : 'Generate draft'}
+        </Button>
+      </div>
+
+      {draft && (
+        <>
+          <p className="text-xs text-ink-muted">{servedBy}</p>
+          {draft.templateReason && <p className="text-xs text-st-warn">{draft.templateReason}</p>}
+          {draft.issues.length > 0 && (
+            <div role="alert" className="rounded-md border px-3 py-2 text-xs text-st-lost" style={{ borderColor: 'var(--hue-lost)' }}>
+              <div className="font-medium">This draft failed a check; regenerate it or edit it before sending.</div>
+              <ul className="mt-1 list-disc pl-4">{draft.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+            </div>
+          )}
+          <label htmlFor="pitch-body" className="sr-only">Message</label>
+          <Textarea id="pitch-body" rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
+          <div className="flex items-start justify-between gap-3 text-xs text-ink-muted">
+            <span className="whitespace-pre-line">{draft.signOff || 'Add your name and number in Arcana → Profile for a sign-off.'}</span>
+            <span className={cn('shrink-0 tabular', body.trim().length > 600 && 'text-st-lost')}>{body.trim().length}/600</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" icon={<Check className="size-3.5" />} onClick={() => void copy()}>Copy</Button>
+            {draft.phone ? (
+              <a
+                href={whatsAppLink(draft.phone.wa, message)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setAskSent(true)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium text-gold-ink hover:border-gold"
+              >
+                <Phone className="size-3.5" />Open in WhatsApp
+              </a>
+            ) : (
+              <span className="self-center text-xs text-ink-muted">No mobile number for WhatsApp; copy the text instead.</span>
+            )}
+          </div>
+          {askSent && (
+            <div className="flex items-center gap-2 border-t border-border pt-2.5 text-sm">
+              <span className="text-ink">Sent?</span>
+              <Button size="sm" variant="primary" onClick={() => void confirmSent()}>Yes, log it</Button>
+              <Button size="sm" variant="ghost" onClick={() => setAskSent(false)}>Not sent</Button>
+            </div>
+          )}
         </>
       )}
     </div>
