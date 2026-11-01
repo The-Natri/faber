@@ -354,6 +354,22 @@ async function search(model: string, only?: string) {
   }
 }
 
+// Direct search (POST /search): results without a model in the loop, so Faber can clean and screen
+// them before any model reads them. Priced per search like the in-loop tool.
+async function directSearch(query: string) {
+  const body = { query, max_results: 5, max_tokens_per_page: 120 };
+  print(`\n[estimate] direct search: ≤ $${TOOL_CALL_USD.toFixed(6)} (one search, no model)`);
+  const r = await request('post', '/search', body);
+  const cost = costOf(at(r.body, 'usage.cost_usd'));
+  fs.appendFileSync(LEDGER, `${JSON.stringify({ at: new Date().toISOString(), label: 'direct search', requested: 'search', status: r.status, cost_usd: cost })}\n`);
+  print(`[actual] direct search: HTTP ${r.status}, cost_usd ${cost ?? 'not returned'} · ledger total $${ledgerTotal().toFixed(6)}`);
+  if (EVIDENCE) fs.writeFileSync(EVIDENCE, `${redact(JSON.stringify({ request: { method: 'POST', url: `${BASE_URL}/search`, body }, response: r }, null, 2))}\n`);
+  report(`direct search "${query}"`, r, (b) => ({
+    search_tool: at(b, 'search_tool'), usage: at(b, 'usage'),
+    results: list(at(b, 'results')).map((x) => ({ title: at(x, 'title'), url: at(x, 'url'), snippet: clip(at(x, 'snippet'), 160) })),
+  }));
+}
+
 async function code(model: string) {
   const prompt = 'Use code execution to compute the mean and the population standard deviation of [3, 5, 10, 14]. Reply with both numbers.';
   report(`code exec (chat completions) via ${model}`, await paid(`code chat ${model}`, model, 600, '/chat/completions', {
@@ -435,6 +451,7 @@ const commands: Record<string, () => Promise<void> | void> = {
   guardrail: () => guardrail(args[0], args[1]),
   mcp: () => mcp(args[0], args[1]),
   screen: () => screen(args[0], args[1] ?? 'clean'),
+  dsearch: () => directSearch(args.join(' ')),
 };
 const needsArg = !['smoke', 'discover', 'open', 'spend', 'ledger'].includes(cmd);
 if (!commands[cmd] || (needsArg && !args[0])) {
