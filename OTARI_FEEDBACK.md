@@ -99,9 +99,23 @@ Running log of mismatches between the Otari docs and the hosted gateway, found w
 - **Why it matters:** the panel contradicts the routing plan beside it, and tells a reader a fallback rescued a request that failed. dashboard.md says the panel shows "where the gateway stepped in"; it should only say a later attempt answered when one did.
 - **Suggestion:** word the step-in from the final outcome ("fell back; the fallback also failed (504)").
 
+### 11. 2026-11-01 · Direct search (`POST /search`) has no search tool on hosted, though in-loop search works
+- **Docs** (api-reference.md, "Search"; tools.md, "Direct search"): `POST /api/v1/search` runs a configured search tool directly; "a SearXNG search tool can reuse `web_search_url`, so model-initiated and direct search can share one backend".
+- **Happened:** with web search enabled for the workspace (in-loop `otari_web_search` works and costs $0.01), `POST /api/v1/search` `{"query":"Mozilla.ai official website","max_results":5,"max_tokens_per_page":120}` answers `400 {"detail":"No search tools are configured. Add one on the dashboard's Tools & Guardrails page (or POST /api/v1/search-tools), or declare one under 'search_tools' in your config file, supplied directly or through OTARI_CONFIG_YAML / OTARI_CONFIG_B64."}` (`Otari-Request-ID: 04af0a15-4f4f-4510-ae27-62dfe9fb9f08`, not charged).
+- **Why it matters:** direct search is the way to get results *without* a model reading them first, which is what an app that screens untrusted text before any model sees it wants. On hosted, the only way in is a vendor search key (Tavily, Brave, Exa) on the workspace. The message also points a hosted tenant at a config file and environment variables they can't set.
+- **Faber's workaround:** one small model call with `otari_web_search` (`max_uses: 1`) whose text is thrown away; only the `sources` Otari reports in `otari_tool_calls` are kept, then screened before Model A reads them.
+- **Suggestion:** let direct search use the same hosted backend as the in-loop tool (priced the same), or say on the hosted docs that direct search needs a workspace search key, and word the 400 for tenants.
+- **Repro:** `dsearch Mozilla.ai official website`.
+
+### 12. 2026-11-01 · A mandated guardrail's 403 doesn't say which check fired, so a false positive can't be told apart
+- **Happened:** the org's Lakera mandate (prompt defense and PII on; name, link and moderation detectors off) blocked a screening request whose latest user message was the cleaned text of an ordinary bakery shop's home page (phone numbers and emails already redacted): `403 {"detail":{"message":"Request blocked by guardrail policy.","code":"guardrail_violation","guardrails":[{"profile":"lakera-faber","explanation":null,"score":1}]}}`. The same flow passed nine other business pages and listings.
+- **Why it matters:** with `explanation: null` and no detector name, a tenant can't tell a prompt-injection hit from a PII hit, or decide whether to tune the Lakera policy or their own text cleaning. guardrails.md keeps the vendor's words out of the response on purpose; the detector *category* would be enough.
+- **Suggestion:** pass the triggered category (for example `prompt_attack`, `pii/phone_number`) through in `guardrails[].explanation` or a new field, without the vendor's raw message.
+
 ## Prices measured (hosted EU, 2026-10-31; not found in the docs)
 - Every gateway tool call is a flat **$0.01** on top of model tokens: web search $0.010000 (total $0.010568 = 3,597 input + 47 output tokens on `mistral-small-4` + $0.01), web fetch $0.010000 (total $0.010182), code execution ≈ $0.01 (total $0.010156). tools.md explains how rates are set ("dollars per call") but the hosted price list isn't published. A tenant can only find it by spending.
 - A web search also feeds ~3.6k tokens of results back as model input.
+- Faber's website check, measured on 10 leads (2026-11-01): $0.0105 per lead on average (search step $0.0102, screen $0.0001, decision $0.0002); re-checking a lead whose site is known, without a search, $0.00015.
 - **Suggestion:** publish the hosted tool rates, and return a per-tool line in `usage` (tools.md describes a "pricing breakdown" on the usage row, but the inline `usage` carries only the total).
 
 ## Confirmed working (and known issues retested)
