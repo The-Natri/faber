@@ -51,9 +51,10 @@ export class WebsiteCheckRunner {
   start(request: { count: number } | { leadIds: number[] }): Promise<void> {
     if (this.state.running) throw new AppError('CONFLICT', 'A website check is already running');
     const db = this.getDb();
+    // Chains and not-a-fit leads (both is_chain = 1) are never part of a batch, even when picked
     const leads = 'leadIds' in request
       ? request.leadIds.flatMap((id) => {
-        const row = db.prepare('SELECT id, name FROM leads WHERE id = ? AND deleted_at IS NULL').get(id) as { id: number; name: string } | undefined;
+        const row = db.prepare('SELECT id, name FROM leads WHERE id = ? AND deleted_at IS NULL AND is_chain = 0').get(id) as { id: number; name: string } | undefined;
         return row ? [row] : [];
       })
       : nextUncheckedLeads(db, request.count);

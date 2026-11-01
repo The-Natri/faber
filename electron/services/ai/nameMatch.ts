@@ -31,7 +31,7 @@ const DECISIONS = new Set(['match', 'no_match', 'unsure']);
 const plain = (text: string, max: number) => text.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
 const normalizeUrl = (url: string) => url.trim().toLowerCase().replace(/\/+$/, '');
 
-export function parseNameMatch(text: string, candidates: string[]): Omit<NameMatchSuggestion, 'leadId' | 'costUsd'> | null {
+export function parseNameMatch(text: string, candidates: string[]): Omit<NameMatchSuggestion, 'leadId' | 'costUsd' | 'lowConfidence'> | null {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) return null;
   let parsed: { decision?: unknown; suggested_name?: unknown; evidence_url?: unknown; reason?: unknown };
@@ -59,8 +59,8 @@ export async function suggestNameMatch(db: Database.Database, gateway: WebsiteCh
 
   const facts = publicLeadFacts(lead);
   let costUsd = 0;
-  const suggestion = (patch: Omit<NameMatchSuggestion, 'leadId' | 'costUsd'>): NameMatchSuggestion =>
-    ({ leadId, costUsd: Number(costUsd.toFixed(6)), ...patch });
+  const suggestion = (patch: Omit<NameMatchSuggestion, 'leadId' | 'costUsd' | 'lowConfidence'>): NameMatchSuggestion =>
+    ({ leadId, costUsd: Number(costUsd.toFixed(6)), ...patch, lowConfidence: patch.decision === 'match' && !patch.evidenceUrl });
 
   try {
     const found = await gateway.chat({

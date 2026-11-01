@@ -293,3 +293,46 @@ describe('website status filter', () => {
     expect(listLeads(db, filters).map((l) => l.id)).toEqual([id]);
   });
 });
+
+describe('Phase 2 fixes', () => {
+  it('keeps an earlier verdict when a re-check is blocked, without stacking notes', async () => {
+    const id = addLead({ website_url: 'https://shop.example' });
+    db.prepare(`UPDATE leads SET website_status = 'found', website_evidence = 'https://shop.example', website_reason = 'Own shop site', website_checked_at = '2026-11-01 10:00:00' WHERE id = ?`).run(id);
+    const blockedScreen: Step = () => new AiError('blocked', 'blocked', activity(null));
+
+    const first = await checkWebsite(db, gateway([blockedScreen]).g, id, page('<p>Shop</p>'));
+    await checkWebsite(db, gateway([blockedScreen]).g, id, page('<p>Shop</p>'));
+
+    expect(first).toMatchObject({ verdict: 'has_site', evidenceUrl: 'https://shop.example', screen: 'unsafe', error: null });
+    expect(lead(id)).toMatchObject({
+      website_status: 'found', website_evidence: 'https://shop.example', website_checked_at: '2026-11-01 10:00:00',
+      website_reason: "Re-check couldn't run (blocked by guardrail). Earlier: Own shop site",
+    });
+  });
+
+  it('tells the model that not finding the business is unknown, not no_site', () => {
+    expect(DECIDE_PROMPT).toMatch(/Not finding the business is\s+unknown, never no_site/);
+  });
+
+  it('skips chain and not-a-fit leads even when a batch names them', async () => {
+    const chain = addLead({ name: 'Aavin', is_chain: 1, chain_reason: 'blocklist' });
+    const notAFit = addLead({ name: 'Nope', is_chain: 1, chain_reason: 'not_a_fit' });
+    const { g, requests } = gateway([]);
+    const r = new WebsiteCheckRunner(() => db, g, { onState: () => undefined, delayMs: () => 0, fetcher: noFetch });
+
+    await r.start({ leadIds: [chain, notAFit] });
+
+    expect(requests).toHaveLength(0);
+    expect(r.getState()).toMatchObject({ total: 0, processed: 0 });
+  });
+
+  it('marks a match without a source URL as low confidence', async () => {
+    const id = addLead({ name: 'Velan Tea Desk', enrichment_status: 'review' });
+    const { g } = gateway([
+      searched([{ url: 'https://example.org/list', title: 'Tea stalls' }]),
+      answer('{"violation": 0}'),
+      answer('{"decision": "match", "suggested_name": "Velan Kaappi Tea Desk", "evidence_url": null, "reason": "Similar name"}'),
+    ]);
+    expect(await suggestNameMatch(db, g, id)).toMatchObject({ decision: 'match', lowConfidence: true, evidenceUrl: null });
+  });
+});

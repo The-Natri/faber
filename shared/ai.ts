@@ -60,6 +60,8 @@ export interface NameMatchSuggestion {
   suggestedName: string | null;
   evidenceUrl: string | null;
   reason: string;
+  // A match the model couldn't tie to a result URL: shown as "possible match (low confidence)"
+  lowConfidence: boolean;
   costUsd: number;
 }
 

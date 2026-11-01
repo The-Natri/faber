@@ -399,7 +399,11 @@ function NameCheckPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Prom
       ) : (
         <>
           <p className="text-sm text-ink">
-            <span className="font-semibold">{suggestion.decision === 'match' ? 'Looks like a match' : suggestion.decision === 'no_match' ? 'Looks like a different business' : 'Not sure'}</span>
+            <span className="font-semibold">
+              {suggestion.decision === 'match'
+                ? (suggestion.lowConfidence ? 'Possible match (low confidence: no source to show)' : 'Looks like a match')
+                : suggestion.decision === 'no_match' ? 'Looks like a different business' : 'Not sure'}
+            </span>
             {suggestion.reason && <> · {suggestion.reason}</>}
             {suggestion.evidenceUrl && <> <a href={suggestion.evidenceUrl} target="_blank" rel="noreferrer" className="text-gold-ink hover:underline">Evidence</a></>}
             <span className="block text-xs text-ink-muted tabular">AI suggestion, {usd(suggestion.costUsd)}. Nothing changes until you choose.</span>
@@ -407,7 +411,9 @@ function NameCheckPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Prom
           <label htmlFor="name-check-name" className="text-xs text-ink-muted">Name to keep if it's a match</label>
           <Input id="name-check-name" value={name} onChange={(e) => setName(e.target.value)} />
           <div className="flex gap-2">
-            <Button size="sm" variant="primary" icon={<Check className="size-3.5" />} disabled={!name.trim()} loading={busy === 'match'} onClick={() => void resolve('match')}>Confirm match</Button>
+            <Button size="sm" variant={suggestion.lowConfidence ? 'secondary' : 'primary'} icon={<Check className="size-3.5" />} disabled={!name.trim()} loading={busy === 'match'} onClick={() => void resolve('match')}>
+              {suggestion.lowConfidence ? 'It is the same business' : 'Confirm match'}
+            </Button>
             <Button size="sm" variant="ghost" loading={busy === 'no_match'} onClick={() => void resolve('no_match')}>Not the same business</Button>
           </div>
         </>
