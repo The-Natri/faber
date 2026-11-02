@@ -94,7 +94,8 @@ export const requestSchemas = {
   // Suggests only; leads:resolveReview applies what the user decides
   'ai:suggestNameMatch': z.object({ leadId: id }),
   // Model B through faber-pitch, about $0.0003; the template when Otari fails or a guardrail blocks
-  'ai:draftPitch': z.object({ leadId: id }),
+  // force: draft before the website check has a verdict ("Draft anyway")
+  'ai:draftPitch': z.object({ leadId: id, force: z.boolean().default(false) }),
 
   'backup:list': none,
   'backup:create': none,
@@ -151,6 +152,7 @@ export const requestSchemas = {
   'leads:unflagChain': z.object({ id }),
   'leads:resolveReview': z.object({ id, decision: z.enum(['match', 'no_match']), name: z.string().trim().max(200).optional() }),
   // Only after the user confirms "Sent?"
+  'leads:setWebsiteStatus': z.object({ id, status: z.enum(['none', 'found', 'outdated', 'unknown']), note: z.string().max(300).nullable().default(null) }),
   'leads:logContact': z.object({ id, channel: z.literal('whatsapp'), note: z.string().max(2000).nullable().default(null) }),
 
   'chains:list': none,
@@ -308,6 +310,7 @@ export interface Responses {
   'leads:unflagChain': void;
   'leads:resolveReview': Lead;
   'leads:logContact': Lead;
+  'leads:setWebsiteStatus': Lead;
 
   'chains:list': ChainPattern[];
   'chains:add': { flagged: number };

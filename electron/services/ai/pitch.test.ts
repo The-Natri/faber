@@ -10,7 +10,7 @@ import { normalizeIndianMobile, whatsAppLink } from '../../../shared/phone.ts';
 import { SETTINGS_SCHEMAS } from '../../../shared/settings.ts';
 import { leadActivity, logContactAttempt } from '../leads/index.ts';
 import { AiError, type ChatRequest } from './gateway.ts';
-import { PITCH_MAX_CHARS, PITCH_PROMPT, checkPitch, cleanPitch, draftPitch, signOff, templatePitch, type PitchGateway } from './pitch.ts';
+import { OPENING_STYLES, PITCH_MAX_CHARS, PITCH_PROMPT, checkPitch, cleanPitch, draftPitch, signOff, templatePitch, type PitchGateway } from './pitch.ts';
 import { publicLeadFacts } from './facts.ts';
 
 let dir: string;
@@ -76,7 +76,7 @@ describe('draftPitch', () => {
 
     expect(draft).toMatchObject({
       source: 'ai', issues: [], servedModel: 'deepseek-ai/DeepSeek-V4-Pro', provider: 'deepinfra', fallback: false, costUsd: 0.00031,
-      signOff: '— Owner Person, Studio Example\n+91 91234 56789', phone: { e164: '+919876543210', wa: '919876543210' },
+      signOff: 'Owner Person, Studio Example\n+91 91234 56789', phone: { e164: '+919876543210', wa: '919876543210' },
     });
     expect(draft.body.startsWith('Hi Corner Cafe team!')).toBe(true);
     expect(draft.body).not.toContain('**');
@@ -135,7 +135,7 @@ describe('template, sign-off and WhatsApp', () => {
   });
 
   it('builds the sign-off from whatever profile fields are set', () => {
-    expect(signOff(SETTINGS_SCHEMAS.profile.parse({ yourName: '', businessName: 'Studio', phone: '' }))).toBe('— Studio');
+    expect(signOff(SETTINGS_SCHEMAS.profile.parse({ yourName: '', businessName: 'Studio', phone: '' }))).toBe('Studio');
   });
 
   it('normalises Indian mobiles and rejects landlines', () => {
@@ -160,5 +160,36 @@ describe('logContactAttempt', () => {
 
     const later = addLead({ status: 'replied' });
     expect(logContactAttempt(db, later, 'whatsapp', null).status).toBe('replied');
+  });
+});
+
+describe('pitch polish', () => {
+  it('needs an offer and a website verdict before drafting, unless forced', async () => {
+    const noOffer = { ...settings, outreach: SETTINGS_SCHEMAS.outreach.parse({}) };
+    await expect(draftPitch(db, gateway('x').g, addLead(), noOffer)).rejects.toThrow(/Add your offer/);
+
+    const unknown = addLead({ website_status: 'unknown', website_reason: null });
+    await expect(draftPitch(db, gateway('x').g, unknown, settings)).rejects.toThrow(/Check the website first/);
+    const { g, requests } = gateway('Would you like a website that works for you? I build mobile-friendly websites with WhatsApp ordering.');
+    expect((await draftPitch(db, g, unknown, settings, { force: true })).source).toBe('ai');
+    expect(requests).toHaveLength(1);
+  });
+
+  it('asks for the chosen opening style and never the "I noticed" opener', async () => {
+    const { g, requests } = gateway('Hello there, would you like a site? I build mobile-friendly websites with WhatsApp ordering.');
+    await draftPitch(db, g, addLead(), settings, { style: 2 });
+    expect(requests[0].messages[1].content).toContain(`Opening style: ${OPENING_STYLES[2]}`);
+    expect(PITCH_PROMPT).toContain("don't start with \"Hi {business} team, I noticed\"");
+  });
+
+  it('turns em and en dashes into plain punctuation', () => {
+    expect(cleanPitch('No site yet—just listings. Open 9–5 daily – ask us.')).toBe('No site yet, just listings. Open 9-5 daily, ask us.');
+    expect(checkPitch('A site — today?', 'x')).toContain('It uses an em or en dash.');
+  });
+
+  it("flags service features the offer doesn't mention", () => {
+    const input = "The sender's offer: I build simple websites for local shops.";
+    expect(checkPitch('I can set up Google Maps for you. Open to a chat?', input)).toContain("It describes your service with something your offer doesn't mention: google maps");
+    expect(checkPitch('I build simple websites for local shops. Open to a chat?', input)).toEqual([]);
   });
 });

@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { AppError } from '../../ipc/core.ts';
 import { ACTIVE_STAGES, asStatus, canMove, LOST_REASON_LABEL, STAGE_LABEL, type LeadStatus, type LostReason } from '../../../shared/pipeline.ts';
-import type { BulkLeadAction, BulkResult, Lead, LeadActivity, LeadFacets, LeadFilters, LeadInput } from '../../../shared/types.ts';
+import type { BulkLeadAction, BulkResult, Lead, LeadActivity, LeadFacets, LeadFilters, LeadInput, WebsiteStatus } from '../../../shared/types.ts';
 import { createReminder } from '../reminders/index.ts';
 import { normalizeCity, placeCity } from './city.ts';
 import { blocklistMatch } from './chains.ts';
@@ -128,6 +128,25 @@ export function resolveEnrichmentReview(db: Database.Database, id: number, decis
       db.prepare(`UPDATE leads SET enrichment_status = 'skipped', last_updated = datetime('now') WHERE id = ?`).run(id);
       addActivity(db, id, 'note', { body: 'Name check: not the same business on Google Maps; skipped from enrichment' });
     }
+  })();
+  return requireLead(db, id);
+}
+
+const WEBSITE_LABEL: Record<WebsiteStatus, string> = { none: 'No site', found: 'Has site', outdated: 'Outdated site', unknown: 'Site unclear' };
+
+// The user corrects the website verdict by hand. The evidence stays; the reason says who set it, and
+// the timeline records the change.
+export function setWebsiteStatus(db: Database.Database, id: number, status: WebsiteStatus, note: string | null): Lead {
+  const lead = requireLead(db, id);
+  const why = note?.trim() ?? '';
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE leads SET website_status = ?, website_reason = ?, website_checked_at = datetime('now'), last_updated = datetime('now')
+      WHERE id = ?
+    `).run(status, `Set by you${why ? `: ${why}` : ''}`.slice(0, 300), id);
+    addActivity(db, id, 'note', {
+      body: `Website status set to “${WEBSITE_LABEL[status]}” by you (was “${WEBSITE_LABEL[lead.website_status]}”)${why ? `: ${why}` : ''}`,
+    });
   })();
   return requireLead(db, id);
 }

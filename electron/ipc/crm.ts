@@ -2,7 +2,7 @@ import type { AppContext } from '../context.ts';
 import type { PartialHandlerMap } from './core.ts';
 import { addPattern, listPatterns, markNotAFit, removePattern, unflagLead } from '../services/leads/chains.ts';
 import {
-  bulkLeads, createLead, getLead, leadActivity, leadFacets, listLeads, logContactAttempt, moveLead, resolveEnrichmentReview, setStarred, setTags,
+  bulkLeads, createLead, getLead, leadActivity, leadFacets, listLeads, logContactAttempt, moveLead, resolveEnrichmentReview, setStarred, setTags, setWebsiteStatus,
   softDeleteLead, updateLead, updateLeadNotes,
 } from '../services/leads/index.ts';
 import { addWorkLog, createProject, listProjects, softDeleteProject, updateProject, updateProjectStage } from '../services/projects/index.ts';
@@ -28,6 +28,7 @@ export function leadsHandlers(ctx: AppContext) {
     'leads:unflagChain': ({ id }) => unflagLead(ctx.db(), id),
     'leads:resolveReview': ({ id, decision, name }) => resolveEnrichmentReview(ctx.db(), id, decision, name),
     'leads:logContact': ({ id, channel, note }) => logContactAttempt(ctx.db(), id, channel, note),
+    'leads:setWebsiteStatus': ({ id, status, note }) => setWebsiteStatus(ctx.db(), id, status, note),
     'chains:list': () => listPatterns(ctx.db()),
     'chains:add': ({ pattern }) => addPattern(ctx.db(), pattern),
     'chains:remove': ({ id }) => removePattern(ctx.db(), id),

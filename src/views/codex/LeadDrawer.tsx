@@ -3,9 +3,9 @@ import { Ban, Check, Globe, Pencil, Phone, Plus, RotateCcw, Sparkles, Star, Tras
 import { call, errorText } from '../../lib/ipc.ts';
 import { cn, formatDateTime, usd } from '../../lib/format.ts';
 import { useLoad } from '../../lib/useLoad.ts';
-import { Button, Checkbox, ConfirmDialog, Drawer, IconButton, Input, ScoreSeal, Skeleton, StatusPill, Textarea, useToast } from '../../ui/index.ts';
+import { Button, Checkbox, ConfirmDialog, Drawer, IconButton, Input, ScoreSeal, Select, Skeleton, StatusPill, Textarea, useToast } from '../../ui/index.ts';
 import { canMove, LOST_REASON_LABEL, STAGE_LABEL, STAGES, type LeadStatus } from '../../../shared/pipeline.ts';
-import type { Lead, LeadActivity } from '../../../shared/types.ts';
+import type { Lead, LeadActivity, WebsiteStatus } from '../../../shared/types.ts';
 import type { NameMatchSuggestion, PitchDraft } from '../../../shared/ai.ts';
 import { whatsAppLink } from '../../../shared/phone.ts';
 import { VERDICT_LABEL, WebsiteBadge } from './WebsiteBadge.tsx';
@@ -309,6 +309,17 @@ function WebsitePanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promis
   const [busy, setBusy] = useState(false);
   const checked = lead.website_checked_at !== null;
 
+  const correct = async (status: WebsiteStatus) => {
+    if (status === lead.website_status) return;
+    try {
+      await call('leads:setWebsiteStatus', { id: lead.id, status, note: null });
+      toast({ title: 'Website status updated', description: 'Recorded on the timeline as set by you.', tone: 'success' });
+      await onChanged();
+    } catch (err) {
+      toast({ title: 'Could not update the status', description: errorText(err), tone: 'error' });
+    }
+  };
+
   const check = async () => {
     setBusy(true);
     try {
@@ -351,9 +362,22 @@ function WebsitePanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promis
           <span className="block text-xs text-ink-muted tabular">Checked {formatDateTime(lead.website_checked_at)}</span>
         </p>
       )}
+      <div className="flex items-center gap-2 text-xs text-ink-muted">
+        <span>Correct it by hand:</span>
+        <div className="w-40">
+          <Select value={lead.website_status} onChange={(v) => void correct(v)} options={WEBSITE_OPTIONS} label="Website status" />
+        </div>
+      </div>
     </div>
   );
 }
+
+const WEBSITE_OPTIONS: { value: WebsiteStatus; label: string }[] = [
+  { value: 'none', label: 'No site' },
+  { value: 'outdated', label: 'Outdated site' },
+  { value: 'found', label: 'Has site' },
+  { value: 'unknown', label: 'Site unclear' },
+];
 
 // Enrichment flagged this lead because its Google Maps name didn't match. Model A suggests; you decide.
 function NameCheckPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<void> }) {
@@ -435,11 +459,29 @@ function PitchPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<
   const [askSent, setAskSent] = useState(false);
   const message = draft ? [body.trim(), draft.signOff].filter(Boolean).join('\n\n') : '';
 
-  const generate = async () => {
+  const [checking, setChecking] = useState(false);
+  const needsCheck = lead.website_status === 'unknown' && !draft;
+
+  const checkFirst = async () => {
+    setChecking(true);
+    try {
+      const result = await call('ai:checkWebsite', { leadId: lead.id });
+      toast(result.error
+        ? { title: 'Website not checked', description: result.error, tone: 'error' }
+        : { title: VERDICT_LABEL[result.verdict], description: `${result.reason || lead.name} · ${usd(result.costUsd)}`, tone: 'success' });
+      await onChanged();
+    } catch (err) {
+      toast({ title: 'Website not checked', description: errorText(err), tone: 'error' });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const generate = async (force = false) => {
     setBusy(true);
     setAskSent(false);
     try {
-      const next = await call('ai:draftPitch', { leadId: lead.id });
+      const next = await call('ai:draftPitch', { leadId: lead.id, force });
       setDraft(next);
       setBody(next.body);
     } catch (err) {
@@ -477,11 +519,26 @@ function PitchPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<
     <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-bg-elev px-3.5 py-3">
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-medium text-ink">WhatsApp pitch</div>
-        <Button size="sm" variant={draft ? 'ghost' : 'primary'} icon={<Sparkles className="size-3.5" />} loading={busy}
-          title="Model B through Otari, about $0.0003; the built-in template if Otari is unavailable" onClick={() => void generate()}>
-          {draft ? 'Regenerate' : 'Generate draft'}
-        </Button>
+        {!needsCheck && (
+          <Button size="sm" variant={draft ? 'ghost' : 'primary'} icon={<Sparkles className="size-3.5" />} loading={busy}
+            title="Model B through Otari, about $0.0006; the built-in template if Otari is unavailable"
+            onClick={() => void generate(lead.website_status === 'unknown')}>
+            {draft ? 'Regenerate' : 'Generate draft'}
+          </Button>
+        )}
       </div>
+
+      {needsCheck && (
+        <div className="flex flex-col gap-2 text-sm">
+          <p className="text-ink">Check the website first: the pitch depends on whether {lead.name} has a site, and that isn't clear yet.</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" icon={<Globe className="size-3.5" />} loading={checking}
+              title={lead.website_url ? 'Faber reads the site itself; about $0.001' : 'One Otari web search plus small model calls; about $0.011'}
+              onClick={() => void checkFirst()}>Check website</Button>
+            <Button size="sm" variant="ghost" loading={busy} onClick={() => void generate(true)}>Draft anyway</Button>
+          </div>
+        </div>
+      )}
 
       {draft && (
         <>

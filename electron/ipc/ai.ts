@@ -16,6 +16,6 @@ export function aiHandlers(ctx: AppContext) {
     'ai:stopWebsiteChecks': () => ctx.websiteChecks.stop(),
     'ai:websiteCheckState': () => ctx.websiteChecks.getState(),
     'ai:suggestNameMatch': ({ leadId }) => suggestNameMatch(ctx.db(), ctx.ai, leadId),
-    'ai:draftPitch': ({ leadId }) => draftPitch(ctx.db(), ctx.ai, leadId, { profile: ctx.settings.get('profile'), outreach: ctx.settings.get('outreach') }),
+    'ai:draftPitch': ({ leadId, force }) => draftPitch(ctx.db(), ctx.ai, leadId, { profile: ctx.settings.get('profile'), outreach: ctx.settings.get('outreach') }, { force }),
   } satisfies PartialHandlerMap;
 }

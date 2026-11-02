@@ -55,6 +55,7 @@ export const INVOKE_CHANNELS = [
   'leads:unflagChain',
   'leads:resolveReview',
   'leads:logContact',
+  'leads:setWebsiteStatus',
 
   'chains:list',
   'chains:add',

@@ -40,7 +40,7 @@ describe('SettingsService', () => {
     expect(settings.security.autoLockMinutes).toBe(15);
     expect(settings.appearance.theme).toBe('nocturne');
     expect(settings.outreach).toMatchObject({ followUpDays: [3, 7, 14], dailyGoal: 10, defaultLanguage: 'en' });
-    expect(settings.outreach.pitchOffer).toMatch(/websites for local businesses/);
+    expect(settings.outreach.pitchOffer).toBe('');
     expect(settings.integrations).toEqual({
       otariBaseUrl: 'https://eu.api.otari.ai/api/v1',
       modelVerify: 'faber-verify',
