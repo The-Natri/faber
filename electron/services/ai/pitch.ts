@@ -33,6 +33,7 @@ Rules:
 - End with one simple, low-pressure question.
 - Follow the opening style you're given, and don't start with "Hi {business} team, I noticed".
 - No greeting by personal name (it isn't known).
+- Say nothing about the sender beyond the offer: not where they are based, their experience or their clients.
 - Plain punctuation only: commas, full stops, question marks. No em dashes or en dashes.
 - No links, no phone numbers, no email addresses, no placeholders like [Name], no signature or sign-off
   (one is added later), no hashtags, no emojis, no markdown.
@@ -45,7 +46,7 @@ export const OPENING_STYLES = [
   'Open with a short, genuine compliment based on the facts (its rating, reviews or category), then the website point.',
   'Open directly with the website observation, in a helpful tone, then the offer.',
   'Open with a short question about how customers find the business online.',
-  'Open with a one-line introduction of the sender as a local web designer, then the website point.',
+  "Open with a one-line introduction of the sender as a freelance web designer (don't say where the sender is based or anything else about them), then the website point.",
 ] as const;
 
 const WEBSITE_LINE: Record<WebsiteStatus, string> = {
