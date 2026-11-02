@@ -44,7 +44,7 @@ describe('SettingsService', () => {
     expect(settings.integrations).toEqual({
       otariBaseUrl: 'https://eu.api.otari.ai/api/v1',
       modelVerify: 'faber-verify',
-      modelPitch: 'deepseek/deepseek-v4-pro',
+      modelPitch: 'faber-pitch',
       modelScreener: 'openai/gpt-oss-safeguard-20b',
       websiteBatchSize: 5,
       websiteDelaySeconds: 3,

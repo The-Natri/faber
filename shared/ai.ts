@@ -3,11 +3,12 @@
 
 export const OTARI_EU_BASE_URL = 'https://eu.api.otari.ai/api/v1';
 
-// Model roles. A is a dashboard routing policy (mistral-small-2603 on Mistral, then Mistral Large 3
-// on Bedrock); B and the screener are catalog ids.
+// Model roles. A and B are dashboard routing policies in the key's workspace: faber-verify
+// (mistral-small-2603 on Mistral, then Mistral Large 3 on Bedrock) and faber-pitch (DeepSeek V4 Pro on
+// DeepInfra, then Mistral Large 3 on Bedrock). The screener is a catalog id.
 export const DEFAULT_MODELS = {
   verify: 'faber-verify',
-  pitch: 'deepseek/deepseek-v4-pro',
+  pitch: 'faber-pitch',
   screener: 'openai/gpt-oss-safeguard-20b',
 } as const;
 
