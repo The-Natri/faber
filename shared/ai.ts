@@ -51,6 +51,21 @@ export interface WebsiteCheckState {
   error: string | null;
 }
 
+// ---- Spend (Phase 4) ----
+
+export type SpendCategory = 'website_check' | 'name_match' | 'pitch' | 'screener' | 'other';
+
+export interface AiSpend {
+  // Local calendar month, e.g. "November 2026"
+  monthLabel: string;
+  totalUsd: number;
+  calls: number;
+  byCategory: Record<SpendCategory, { usd: number; calls: number }>;
+  // Faber's own monthly cap from Arcana → Integrations; Faber checks it before every paid call
+  capUsd: number;
+  capReached: boolean;
+}
+
 // ---- Pitch drafts (Phase 3) ----
 
 export interface PitchDraft {

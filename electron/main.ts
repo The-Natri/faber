@@ -179,6 +179,7 @@ app.whenReady().then(async () => {
       keySource: saved ? 'settings' : devKey ? 'dev_env' : 'none',
       baseUrl: integrations.otariBaseUrl,
       models: { verify: integrations.modelVerify, pitch: integrations.modelPitch, screener: integrations.modelScreener },
+      monthlyCapUsd: integrations.monthlyCapUsd,
     };
   });
 

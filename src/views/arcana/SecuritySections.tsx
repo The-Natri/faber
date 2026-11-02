@@ -167,6 +167,10 @@ export function IntegrationsSection() {
             <Input id="int-delay" type="number" min={0} max={60} className="tabular" value={draft.websiteDelaySeconds}
               onChange={(e) => set({ websiteDelaySeconds: Number(e.target.value) })} />
           </Field>
+          <Field label="Faber's monthly AI cap (USD)" htmlFor="int-cap" hint="Faber's own limit, checked before each paid call. 0 pauses AI. Otari's ceilings are separate, in the Otari dashboard.">
+            <Input id="int-cap" type="number" min={0} max={1000} step={0.5} className="tabular" value={draft.monthlyCapUsd}
+              onChange={(e) => set({ monthlyCapUsd: Number(e.target.value) })} />
+          </Field>
         </div>
         <OtariConnection keySaved={secrets.otariApiKey.set} />
       </SectionPanel>

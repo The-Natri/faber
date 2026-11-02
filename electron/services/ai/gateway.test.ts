@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../../db/migrate.ts';
 import { MIGRATIONS } from '../../db/migrations/index.ts';
 import { DEFAULT_MODELS, OTARI_EU_BASE_URL } from '../../../shared/ai.ts';
-import { listAiActivity } from './activity.ts';
+import { listAiActivity, monthSpend } from './activity.ts';
 import { createOtariClient } from './client.ts';
 import { AiError, OtariGateway, guardrailFrom, otariErrorCode, type AiConfig } from './gateway.ts';
 
@@ -186,5 +186,55 @@ describe('response parsing', () => {
     expect(otariErrorCode(undefined, { code: 'insufficient_funds' })).toBe('insufficient_funds');
     expect(otariErrorCode(undefined, { detail: { code: 'guardrail_violation' } })).toBe('guardrail_violation');
     expect(otariErrorCode(undefined, { detail: 'plain text' })).toBeNull();
+  });
+});
+
+describe("Faber's monthly cap and Otari's limits", () => {
+  const capped = (cap: number) => new OtariGateway(() => db, () => ({ ...config(), monthlyCapUsd: cap }), (options) => createOtariClient({ ...options, fetch: fakeFetch }));
+  const spend = (usd: number, createdAt?: string) => db.prepare(`
+    INSERT INTO ai_activity (feature, model_requested, outcome, cost_usd, latency_ms${createdAt ? ', created_at' : ''})
+    VALUES ('pitch', 'faber-pitch', 'ok', ?, 1${createdAt ? ', ?' : ''})
+  `).run(...(createdAt ? [usd, createdAt] : [usd]));
+
+  it('refuses before calling Otari once the cap would be passed, and logs the refusal', async () => {
+    spend(4.9995);
+    const error = (await ask(capped(5)).catch((e: unknown) => e)) as AiError;
+
+    expect(sent).toHaveLength(0);
+    expect(error.kind).toBe('budget');
+    expect(error.message).toMatch(/Faber's own monthly AI cap of \$5\.00 is reached/);
+    expect(error.activity).toMatchObject({ outcome: 'budget', error_code: 'faber_cap', http_status: null, cost_usd: null });
+  });
+
+  it('lets calls through under the cap', async () => {
+    spend(1);
+    replies.push(json(200, completion('fine')));
+    expect((await ask(capped(5))).text).toBe('fine');
+  });
+
+  it('counts only this month, by category', () => {
+    spend(2, '2000-01-15 10:00:00');
+    spend(0.25);
+    db.prepare(`INSERT INTO ai_activity (feature, model_requested, outcome, cost_usd, latency_ms) VALUES ('web_search', 'faber-verify', 'ok', 0.0102, 1), ('screen', 'x', 'ok', 0.0001, 1), ('name_match', 'x', 'ok', 0.01, 1)`).run();
+
+    const month = monthSpend(db);
+
+    expect(month.totalUsd).toBe(0.2703);
+    expect(month.byCategory).toMatchObject({
+      pitch: { usd: 0.25, calls: 1 }, website_check: { usd: 0.0102, calls: 1 }, screener: { usd: 0.0001, calls: 1 }, name_match: { usd: 0.01, calls: 1 },
+    });
+  });
+
+  it("names Otari's own limits differently from Faber's", async () => {
+    replies.push(json(403, { detail: 'Key has $0.00 of budget remaining', code: 'budget_exceeded' }, { 'otari-error-code': 'budget_exceeded', 'otari-budget-scope': 'api_token' }));
+    const ceiling = (await ask(gateway()).catch((e: unknown) => e)) as AiError;
+    expect(ceiling.kind).toBe('budget');
+    expect(ceiling.message).toMatch(/^Otari's spend limit refused the call \(its api token limit\)/);
+
+    replies.push(json(402, { detail: 'no funds', code: 'insufficient_funds' }));
+    const funds = (await ask(gateway()).catch((e: unknown) => e)) as AiError;
+    expect(funds).toMatchObject({ kind: 'budget' });
+    expect(funds.message).toMatch(/balance is too low/);
+    expect(funds.activity?.error_code).toBe('insufficient_funds');
   });
 });

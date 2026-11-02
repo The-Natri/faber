@@ -48,6 +48,7 @@ describe('SettingsService', () => {
       modelScreener: 'openai/gpt-oss-safeguard-20b',
       websiteBatchSize: 5,
       websiteDelaySeconds: 3,
+      monthlyCapUsd: 5,
       telegramChatId: '',
     });
     expect(settings.backups).toEqual({ folder: null, keep: 14 });

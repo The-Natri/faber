@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { EventChannel, InvokeChannel } from './channels.ts';
 import { LEAD_STATUSES, LOST_REASONS } from '../pipeline.ts';
 import { SECRET_NAMES, SETTINGS_SECTIONS, type Appearance, type SettingsSection, type SettingsView } from '../settings.ts';
-import type { AiActivityPage, AiConnectionTest, AiStatus, NameMatchSuggestion, PitchDraft, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
+import type { AiActivityPage, AiConnectionTest, AiSpend, AiStatus, NameMatchSuggestion, PitchDraft, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
 import type {
   AppInfo, AppNotification, BackupOverview, BulkResult, ChainPattern, DashboardData, LeadActivity, LeadFacets, DiscoveryResult, DiscoveryState,
   EnrichmentComplete, EnrichmentState, EntityOption, ExportEntity, Lead, Payment, Project,
@@ -83,6 +83,7 @@ export const requestSchemas = {
   // Costs a fraction of a cent: a free model list, then one 8-token call through Model A
   'ai:testConnection': none,
   'ai:activity': z.object({ limit: z.number().int().min(1).max(1000).default(200) }),
+  'ai:spend': none,
   // About $0.011 per lead without a website_url (one web search), about $0.001 with one
   'ai:checkWebsite': z.object({ leadId: id }),
   'ai:startWebsiteChecks': z.union([
@@ -277,6 +278,7 @@ export interface Responses {
   'ai:status': AiStatus;
   'ai:testConnection': AiConnectionTest;
   'ai:activity': AiActivityPage;
+  'ai:spend': AiSpend;
   'ai:checkWebsite': WebsiteCheckResult;
   'ai:startWebsiteChecks': void;
   'ai:stopWebsiteChecks': void;

@@ -73,6 +73,9 @@ export const integrationsSchema = z.object({
   // Website check batches: each lead costs about $0.011 (one web search plus small model calls)
   websiteBatchSize: z.number().int().min(1).max(20).default(5),
   websiteDelaySeconds: z.number().int().min(0).max(60).default(3),
+  // Faber's own monthly AI spending cap in USD, checked before every paid call; 0 pauses AI entirely.
+  // Separate from (and on top of) any ceiling or budget set in the Otari dashboard.
+  monthlyCapUsd: z.number().min(0).max(1000).default(5),
   telegramChatId: z.string().trim().max(40).default(''),
 });
 

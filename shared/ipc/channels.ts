@@ -22,6 +22,7 @@ export const INVOKE_CHANNELS = [
   'ai:status',
   'ai:testConnection',
   'ai:activity',
+  'ai:spend',
   'ai:checkWebsite',
   'ai:startWebsiteChecks',
   'ai:stopWebsiteChecks',

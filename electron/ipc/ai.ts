@@ -1,5 +1,5 @@
 import type { AppContext } from '../context.ts';
-import { listAiActivity } from '../services/ai/activity.ts';
+import { listAiActivity, monthSpend } from '../services/ai/activity.ts';
 import { suggestNameMatch } from '../services/ai/nameMatch.ts';
 import { draftPitch } from '../services/ai/pitch.ts';
 import type { PartialHandlerMap } from './core.ts';
@@ -10,6 +10,12 @@ export function aiHandlers(ctx: AppContext) {
     'ai:status': () => ctx.ai.status(),
     'ai:testConnection': () => ctx.ai.testConnection(),
     'ai:activity': ({ limit }) => listAiActivity(ctx.db(), limit),
+    'ai:spend': () => {
+      const spend = monthSpend(ctx.db());
+      const capUsd = ctx.settings.get('integrations').monthlyCapUsd;
+      // Reached once even the smallest call (~$0.002) would go over it, as the gateway decides
+      return { ...spend, capUsd, capReached: spend.totalUsd + 0.002 > capUsd };
+    },
     'ai:checkWebsite': ({ leadId }) => ctx.websiteChecks.checkOne(leadId),
     // Returns once the batch has started; progress arrives as websiteCheck:state events
     'ai:startWebsiteChecks': (request) => { void ctx.websiteChecks.start(request); },

@@ -267,7 +267,7 @@ describe('name match', () => {
 
     const suggestion = await suggestNameMatch(db, g2, id);
 
-    expect(requests.map((r) => r.feature)).toEqual(['web_search', 'screen', 'name_match']);
+    expect(requests.map((r) => r.feature)).toEqual(['name_match', 'screen', 'name_match']);
     expect(suggestion).toMatchObject({ decision: 'match', suggestedName: 'Sri Annapoorna Sree Gowrishankar', evidenceUrl: 'https://www.google.com/maps/place/x' });
     expect(lead(id)).toEqual(before);
   });

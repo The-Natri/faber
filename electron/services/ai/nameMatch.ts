@@ -64,7 +64,7 @@ export async function suggestNameMatch(db: Database.Database, gateway: WebsiteCh
 
   try {
     const found = await gateway.chat({
-      feature: 'web_search', model: gateway.status().models.verify, leadId, maxTokens: 120, allowEmpty: true,
+      feature: 'name_match', model: gateway.status().models.verify, leadId, maxTokens: 120, allowEmpty: true,
       tools: [{ type: 'otari_web_search', max_uses: 1 }],
       messages: [{ role: 'user', content: `Search the web once for: ${searchQuery(facts)}\nAfter searching, reply with the single word: done` }],
     });

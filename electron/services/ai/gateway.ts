@@ -5,7 +5,7 @@ import { AppError } from '../../ipc/core.ts';
 import type {
   AiActivity, AiConnectionTest, AiFeature, AiKeySource, AiOutcome, AiStatus, GuardrailResult,
 } from '../../../shared/ai.ts';
-import { recordAiActivity, type NewAiActivity } from './activity.ts';
+import { monthSpend, recordAiActivity, type NewAiActivity } from './activity.ts';
 import { createOtariClient, type OtariClientOptions } from './client.ts';
 
 export interface AiConfig {
@@ -13,6 +13,8 @@ export interface AiConfig {
   keySource: AiKeySource;
   baseUrl: string;
   models: AiStatus['models'];
+  // Faber's own monthly AI cap in USD; undefined means no app-side cap
+  monthlyCapUsd?: number;
 }
 
 export interface ChatMessage {
@@ -88,6 +90,16 @@ const MESSAGES: Record<Exclude<AiErrorKind, 'failed'>, string> = {
   timeout: "Otari didn't answer in time.",
   empty: 'The model returned an empty answer.',
 };
+
+// Otari's own limits, as opposed to Faber's cap: a spend ceiling or budget in the Otari dashboard
+// (403 budget_exceeded), or an empty Otari balance (402)
+export function otariBudgetMessage(code: string | null, scope: string | null): string {
+  if (code === 'insufficient_funds' || code === 'pricing_required') {
+    return "Otari refused the call: the account's balance is too low (insufficient funds). AI features use their non-AI paths until it's topped up in Otari.";
+  }
+  return `Otari's spend limit refused the call${scope ? ` (its ${scope.replace(/_/g, ' ')} limit)` : ''}. `
+    + 'AI features use their non-AI paths until the limit resets or is raised in the Otari dashboard.';
+}
 
 type Json = Record<string, unknown>;
 const asObject = (value: unknown): Json | null => (value && typeof value === 'object' ? (value as Json) : null);
@@ -170,6 +182,7 @@ export class OtariGateway {
     const base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'> = {
       feature: request.feature, lead_id: request.leadId ?? null, model_requested: request.model,
     };
+    this.checkFaberCap(request, base);
 
     try {
       const { data, response } = await client.chat.completions.create({
@@ -232,9 +245,29 @@ export class OtariGateway {
       });
       const message = kind === 'failed'
         ? `Otari couldn't complete the request${status ? ` (HTTP ${status})` : ' (no response)'}.`
-        : MESSAGES[kind];
+        : kind === 'budget' ? otariBudgetMessage(code, apiError?.headers?.get('otari-budget-scope') ?? null)
+          : MESSAGES[kind];
       throw new AiError(kind, message, activity);
     }
+  }
+
+  // Faber's own monthly cap (Arcana → Integrations), checked before Otari is called, on top of Otari's
+  // own ceilings. A refused call is logged like any other, so it shows in AI Activity.
+  private checkFaberCap(request: ChatRequest, base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'>) {
+    const cap = this.config().monthlyCapUsd;
+    if (cap === undefined) return;
+    const spent = monthSpend(this.db()).totalUsd;
+    // Upper bound for the call about to be made: a web search is $0.01 plus tokens; anything else is cents' fractions
+    const next = request.tools?.length ? 0.011 : 0.002;
+    if (spent + next <= cap) return;
+    const activity = recordAiActivity(this.db(), {
+      ...base, model_served: null, provider: null, fallback: 0, attempt_count: null, request_id: null, guardrail: 'not_reported',
+      outcome: 'budget', http_status: null, error_code: 'faber_cap', prompt_tokens: null, completion_tokens: null,
+      reasoning_tokens: null, cost_usd: null, latency_ms: 0,
+    });
+    throw new AiError('budget',
+      `Faber's own monthly AI cap of $${cap.toFixed(2)} is reached ($${spent.toFixed(4)} spent this month), so Faber didn't call Otari. `
+      + 'AI features use their non-AI paths until next month, or until you raise the cap in Arcana → Integrations.', activity);
   }
 
   // Arcana → Integrations → Test connection: a free model list, then one tiny call through Model A
