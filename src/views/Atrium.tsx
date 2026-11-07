@@ -11,6 +11,7 @@ import {
   ViewHeader, ViewScroll, WaxSeal,
 } from '../ui/index.ts';
 import type { DashboardData } from '../../shared/types.ts';
+import { AskPipeline } from './atrium/AskPipeline.tsx';
 
 const activate = (fn: () => void) => ({
   role: 'button' as const,
@@ -187,6 +188,8 @@ function AtriumBody({ data }: { data: DashboardData }) {
           )}
         </Panel>
       </div>
+
+      <AskPipeline />
 
       {/* Row 3 — per-project revenue · recent activity */}
       <div className="grid grid-cols-5 gap-5">

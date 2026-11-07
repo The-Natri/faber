@@ -54,7 +54,7 @@ export interface WebsiteCheckState {
 
 // ---- Spend (Phase 4) ----
 
-export type SpendCategory = 'website_check' | 'name_match' | 'pitch' | 'screener' | 'other';
+export type SpendCategory = 'website_check' | 'name_match' | 'pitch' | 'screener' | 'pipeline' | 'other';
 
 export interface AiSpend {
   // Local calendar month, e.g. "November 2026"
@@ -65,6 +65,26 @@ export interface AiSpend {
   // Faber's own monthly cap from Arcana → Integrations; Faber checks it before every paid call
   capUsd: number;
   capReached: boolean;
+}
+
+// ---- Ask your pipeline (Phase 5) ----
+
+export interface PipelineAnswer {
+  question: string;
+  answer: string;
+  // The table the code printed between TABLE_START and TABLE_END, when it did
+  table: { columns: string[]; rows: string[][] } | null;
+  // The code Otari ran, and what it printed
+  code: string[];
+  logs: string;
+  servedModel: string | null;
+  provider: string | null;
+  fallback: boolean;
+  costUsd: number;
+  requestId: string | null;
+  // Size of the anonymised dataset the model worked on
+  segments: number;
+  leads: number;
 }
 
 // ---- Pitch drafts (Phase 3) ----

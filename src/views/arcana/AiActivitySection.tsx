@@ -37,6 +37,7 @@ const CATEGORY_LABEL: Record<SpendCategory, string> = {
   name_match: 'Name match',
   pitch: 'Pitch drafts',
   screener: 'Screener (gpt-oss-safeguard)',
+  pipeline: 'Pipeline questions (code execution)',
   other: 'Other (connection tests)',
 };
 

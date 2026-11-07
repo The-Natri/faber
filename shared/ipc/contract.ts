@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { EventChannel, InvokeChannel } from './channels.ts';
 import { LEAD_STATUSES, LOST_REASONS } from '../pipeline.ts';
 import { SECRET_NAMES, SETTINGS_SECTIONS, type Appearance, type SettingsSection, type SettingsView } from '../settings.ts';
-import type { AiActivityPage, AiConnectionTest, AiSpend, AiStatus, NameMatchSuggestion, PitchDraft, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
+import type { AiActivityPage, AiConnectionTest, AiSpend, AiStatus, NameMatchSuggestion, PipelineAnswer, PitchDraft, WebsiteCheckResult, WebsiteCheckState } from '../ai.ts';
 import type {
   AppInfo, AppNotification, BackupOverview, BulkResult, ChainPattern, DashboardData, LeadActivity, LeadFacets, DiscoveryResult, DiscoveryState,
   EnrichmentComplete, EnrichmentState, EntityOption, ExportEntity, Lead, Payment, Project,
@@ -97,6 +97,8 @@ export const requestSchemas = {
   // Model B through faber-pitch, about $0.0003; the template when Otari fails or a guardrail blocks
   // force: draft before the website check has a verdict ("Draft anyway")
   'ai:draftPitch': z.object({ leadId: id, force: z.boolean().default(false) }),
+  // Otari code execution over an anonymised summary of the pipeline, about $0.012
+  'ai:askPipeline': z.object({ question: z.string().trim().min(1, 'Type a question').max(300) }),
 
   'backup:list': none,
   'backup:create': none,
@@ -285,6 +287,7 @@ export interface Responses {
   'ai:websiteCheckState': WebsiteCheckState;
   'ai:suggestNameMatch': NameMatchSuggestion;
   'ai:draftPitch': PitchDraft;
+  'ai:askPipeline': PipelineAnswer;
 
   'backup:list': BackupOverview;
   'backup:create': { name: string };

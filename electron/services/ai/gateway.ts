@@ -55,6 +55,25 @@ export interface ChatResult {
   activity: AiActivity;
 }
 
+export interface CodeRunRequest {
+  feature: AiFeature;
+  model: string;
+  instructions: string;
+  input: string;
+  maxOutputTokens: number;
+  timeoutMs?: number;
+}
+
+export interface CodeRunResult {
+  // The model's final answer
+  text: string;
+  // Each piece of code Otari ran, in order
+  code: string[];
+  // Everything the code printed
+  logs: string;
+  activity: AiActivity;
+}
+
 function toolCallsFrom(value: unknown): OtariToolCall[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((raw) => {
@@ -182,7 +201,8 @@ export class OtariGateway {
     const base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'> = {
       feature: request.feature, lead_id: request.leadId ?? null, model_requested: request.model,
     };
-    this.checkFaberCap(request, base);
+    // Upper bound for this call: a web search is $0.01 plus tokens; anything else is fractions of a cent
+    this.checkFaberCap(request.tools?.length ? 0.011 : 0.002, base);
 
     try {
       const { data, response } = await client.chat.completions.create({
@@ -221,44 +241,104 @@ export class OtariGateway {
       if (!answered) throw new AiError('empty', MESSAGES.empty, activity);
       return { text, toolCalls, activity };
     } catch (error) {
-      if (error instanceof AiError) throw error;
-      const apiError = error instanceof APIError ? error : null;
-      const status = apiError?.status ?? null;
-      const code = apiError ? otariErrorCode(apiError.headers, apiError.error) : null;
-      const kind = error instanceof APIConnectionTimeoutError ? 'timeout' : classify(status, code);
+      throw this.failure(error, base, started);
+    }
+  }
+
+  // Code execution through /responses with code_interpreter, run by Otari itself (Otari-Code-Execution:
+  // otari). Unlike Chat Completions, /responses hands back the code that ran and its output, so Faber can
+  // show it. Same cap check, guardrail, logging and error mapping as chat().
+  async codeRun(request: CodeRunRequest): Promise<CodeRunResult> {
+    const client = this.client(request.timeoutMs ?? 90_000);
+    const started = Date.now();
+    const base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'> = {
+      feature: request.feature, lead_id: null, model_requested: request.model,
+    };
+    // A code run is $0.01 plus tokens
+    this.checkFaberCap(0.011, base);
+
+    try {
+      const { data, response } = await client.responses.create({
+        model: request.model,
+        instructions: request.instructions,
+        input: request.input,
+        max_output_tokens: request.maxOutputTokens,
+        tools: [{ type: 'code_interpreter', container: { type: 'auto' } }],
+      }, { headers: { 'Otari-Code-Execution': 'otari' } }).withResponse();
+
+      const code: string[] = [];
+      let logs = '';
+      for (const item of data.output ?? []) {
+        if (item.type !== 'code_interpreter_call') continue;
+        if (item.code) code.push(item.code);
+        for (const output of item.outputs ?? []) if (output.type === 'logs') logs += output.logs;
+      }
+      const text = (data.output_text ?? '').trim();
+      const headers = response.headers;
+      const usage = asObject(data.usage);
+      const details = asObject(usage?.output_tokens_details);
+      const answered = Boolean(text) || code.length > 0;
       const activity = recordAiActivity(this.db(), {
         ...base,
-        model_served: null,
-        provider: null,
-        fallback: 0,
-        attempt_count: null,
-        request_id: apiError?.headers?.get('otari-request-id') ?? null,
-        guardrail: kind === 'blocked' ? 'blocked' : 'not_reported',
-        outcome: OUTCOME[kind],
-        http_status: status,
-        error_code: code ?? (status ? `http_${status}` : 'no_response'),
-        prompt_tokens: null,
-        completion_tokens: null,
-        reasoning_tokens: null,
-        cost_usd: null,
+        model_served: headers.get('otari-model'),
+        provider: headers.get('otari-provider'),
+        fallback: headers.get('otari-fallback') === 'true' ? 1 : 0,
+        attempt_count: asNumber(headers.get('otari-attempt-count')),
+        request_id: headers.get('otari-request-id'),
+        guardrail: guardrailFrom(headers.get('otari-guardrails')),
+        outcome: answered ? 'ok' : 'error',
+        http_status: response.status,
+        error_code: answered ? null : 'empty_completion',
+        prompt_tokens: asNumber(usage?.input_tokens),
+        completion_tokens: asNumber(usage?.output_tokens),
+        reasoning_tokens: asNumber(details?.reasoning_tokens),
+        cost_usd: asNumber(usage?.cost_usd),
         latency_ms: Date.now() - started,
       });
-      const message = kind === 'failed'
-        ? `Otari couldn't complete the request${status ? ` (HTTP ${status})` : ' (no response)'}.`
-        : kind === 'budget' ? otariBudgetMessage(code, apiError?.headers?.get('otari-budget-scope') ?? null)
-          : MESSAGES[kind];
-      throw new AiError(kind, message, activity);
+      if (!answered) throw new AiError('empty', MESSAGES.empty, activity);
+      return { text, code, logs, activity };
+    } catch (error) {
+      throw this.failure(error, base, started);
     }
+  }
+
+  // Logs a failed call and turns it into the AiError features degrade from
+  private failure(error: unknown, base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'>, started: number): AiError {
+    if (error instanceof AiError) return error;
+    const apiError = error instanceof APIError ? error : null;
+    const status = apiError?.status ?? null;
+    const code = apiError ? otariErrorCode(apiError.headers, apiError.error) : null;
+    const kind = error instanceof APIConnectionTimeoutError ? 'timeout' : classify(status, code);
+    const activity = recordAiActivity(this.db(), {
+      ...base,
+      model_served: null,
+      provider: null,
+      fallback: 0,
+      attempt_count: null,
+      request_id: apiError?.headers?.get('otari-request-id') ?? null,
+      guardrail: kind === 'blocked' ? 'blocked' : 'not_reported',
+      outcome: OUTCOME[kind],
+      http_status: status,
+      error_code: code ?? (status ? `http_${status}` : 'no_response'),
+      prompt_tokens: null,
+      completion_tokens: null,
+      reasoning_tokens: null,
+      cost_usd: null,
+      latency_ms: Date.now() - started,
+    });
+    const message = kind === 'failed'
+      ? `Otari couldn't complete the request${status ? ` (HTTP ${status})` : ' (no response)'}.`
+      : kind === 'budget' ? otariBudgetMessage(code, apiError?.headers?.get('otari-budget-scope') ?? null)
+        : MESSAGES[kind];
+    return new AiError(kind, message, activity);
   }
 
   // Faber's own monthly cap (Arcana → Integrations), checked before Otari is called, on top of Otari's
   // own ceilings. A refused call is logged like any other, so it shows in AI Activity.
-  private checkFaberCap(request: ChatRequest, base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'>) {
+  private checkFaberCap(next: number, base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'>) {
     const cap = this.config().monthlyCapUsd;
     if (cap === undefined) return;
     const spent = monthSpend(this.db()).totalUsd;
-    // Upper bound for the call about to be made: a web search is $0.01 plus tokens; anything else is cents' fractions
-    const next = request.tools?.length ? 0.011 : 0.002;
     if (spent + next <= cap) return;
     const activity = recordAiActivity(this.db(), {
       ...base, model_served: null, provider: null, fallback: 0, attempt_count: null, request_id: null, guardrail: 'not_reported',

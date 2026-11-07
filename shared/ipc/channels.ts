@@ -29,6 +29,7 @@ export const INVOKE_CHANNELS = [
   'ai:websiteCheckState',
   'ai:suggestNameMatch',
   'ai:draftPitch',
+  'ai:askPipeline',
 
   'backup:list',
   'backup:create',
