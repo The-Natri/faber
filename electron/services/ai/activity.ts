@@ -17,7 +17,7 @@ export function recordAiActivity(db: Database.Database, entry: NewAiActivity): A
 }
 
 const CATEGORY: Record<AiFeature, SpendCategory> = {
-  web_search: 'website_check', website_check: 'website_check', name_match: 'name_match', pitch: 'pitch',
+  web_search: 'website_check', website_check: 'website_check', website_audit: 'website_audit', name_match: 'name_match', pitch: 'pitch',
   screen: 'screener', pipeline_question: 'pipeline', connection_test: 'other',
 };
 
@@ -32,7 +32,7 @@ export function monthSpend(db: Database.Database, now = new Date()): Omit<AiSpen
     SELECT feature, COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ai_activity WHERE created_at >= ? GROUP BY feature
   `).all(monthStart(now)) as { feature: AiFeature; calls: number; usd: number }[];
   const byCategory: AiSpend['byCategory'] = {
-    website_check: { usd: 0, calls: 0 }, name_match: { usd: 0, calls: 0 }, pitch: { usd: 0, calls: 0 }, screener: { usd: 0, calls: 0 },
+    website_check: { usd: 0, calls: 0 }, website_audit: { usd: 0, calls: 0 }, name_match: { usd: 0, calls: 0 }, pitch: { usd: 0, calls: 0 }, screener: { usd: 0, calls: 0 },
     pipeline: { usd: 0, calls: 0 }, other: { usd: 0, calls: 0 },
   };
   for (const row of rows) {

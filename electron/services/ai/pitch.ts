@@ -7,6 +7,7 @@ import type { WebsiteStatus } from '../../../shared/types.ts';
 import { AiError, type ChatRequest, type ChatResult } from './gateway.ts';
 import { factsForPrompt, publicLeadFacts, type LeadFactSource, type PublicLeadFacts } from './facts.ts';
 import { redactContactDetails } from './screener.ts';
+import { auditForPitch } from './websiteAudit.ts';
 
 // Phase 3 pitch drafts. Model B (routing policy faber-pitch: DeepSeek V4 Pro, then Mistral Large 3 on
 // Bedrock) writes a first WhatsApp message from the allowlisted lead facts, the website check's verdict
@@ -60,6 +61,7 @@ interface PitchLead extends LeadFactSource {
   phone: string | null;
   is_chain: number;
   website_reason: string | null;
+  website_audit: string | null;
 }
 
 // The offer without any sentence that carries a phone number or email: those belong in the sign-off,
@@ -72,11 +74,12 @@ export function offerForMessage(offer: string): string {
 }
 
 // Everything the model may read, in one block. Also what the app-side checks compare against.
-export function pitchInput(facts: PublicLeadFacts, websiteReason: string | null, offer: string): string {
+export function pitchInput(facts: PublicLeadFacts, websiteReason: string | null, offer: string, audit: string | null = null): string {
   const reason = websiteReason ? redactContactDetails(websiteReason).slice(0, 200) : '';
   return [
     factsForPrompt(facts),
     `Website check: ${WEBSITE_LINE[facts.websiteStatus]}${reason ? ` (${reason})` : ''}`,
+    ...(audit ? [audit] : []),
     `The sender's offer: ${offerForMessage(offer).slice(0, 400)}`,
   ].join('\n');
 }
@@ -175,7 +178,7 @@ export async function draftPitch(
   }
 
   const facts = publicLeadFacts(lead);
-  const input = pitchInput(facts, lead.website_reason, offer);
+  const input = pitchInput(facts, lead.website_reason, offer, auditForPitch(lead.website_audit));
   const base = { leadId, signOff: signOff(settings.profile), phone: normalizeIndianMobile(lead.phone) };
   const style = OPENING_STYLES[(options.style ?? Math.floor(Math.random() * OPENING_STYLES.length)) % OPENING_STYLES.length];
 

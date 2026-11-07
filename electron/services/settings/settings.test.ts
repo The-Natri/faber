@@ -46,6 +46,7 @@ describe('SettingsService', () => {
       modelVerify: 'faber-verify',
       modelPitch: 'faber-pitch',
       modelScreener: 'openai/gpt-oss-safeguard-20b',
+      auditMcpUrl: 'https://audit.mrza.ch/mcp',
       websiteBatchSize: 5,
       websiteDelaySeconds: 3,
       monthlyCapUsd: 5,

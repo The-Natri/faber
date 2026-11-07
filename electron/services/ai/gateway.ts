@@ -6,7 +6,7 @@ import type {
   AiActivity, AiConnectionTest, AiFeature, AiKeySource, AiOutcome, AiStatus, GuardrailResult,
 } from '../../../shared/ai.ts';
 import { monthSpend, recordAiActivity, type NewAiActivity } from './activity.ts';
-import { createOtariClient, type OtariClientOptions } from './client.ts';
+import { createOtariClient, guardedFetch, type OtariClientOptions } from './client.ts';
 
 export interface AiConfig {
   apiKey: string | null;
@@ -52,6 +52,23 @@ export interface ChatRequest {
 export interface ChatResult {
   text: string;
   toolCalls: OtariToolCall[];
+  activity: AiActivity;
+}
+
+export interface McpRunRequest {
+  feature: AiFeature;
+  model: string;
+  leadId?: number | null;
+  server: { name: string; url: string; allowedTools: string[]; purposeHint?: string };
+  prompt: string;
+  maxTokens: number;
+  timeoutMs?: number;
+}
+
+export interface McpRunResult {
+  // What the model asked the MCP server for, and what it answered, as Otari reports them
+  toolUses: { name: string; input: Record<string, unknown> }[];
+  toolResults: { content: string; isError: boolean }[];
   activity: AiActivity;
 }
 
@@ -169,6 +186,8 @@ export class OtariGateway {
     private readonly db: () => Database.Database,
     private readonly config: () => AiConfig,
     private readonly makeClient: (options: OtariClientOptions) => OpenAI = createOtariClient,
+    // For the one call the SDK doesn't cover (streamed /messages with MCP); same Otari-Key guard
+    private readonly fetchImpl: typeof fetch = guardedFetch,
   ) {}
 
   status(): AiStatus {
@@ -306,16 +325,27 @@ export class OtariGateway {
   private failure(error: unknown, base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'>, started: number): AiError {
     if (error instanceof AiError) return error;
     const apiError = error instanceof APIError ? error : null;
-    const status = apiError?.status ?? null;
-    const code = apiError ? otariErrorCode(apiError.headers, apiError.error) : null;
-    const kind = error instanceof APIConnectionTimeoutError ? 'timeout' : classify(status, code);
+    return this.recordFailure({
+      status: apiError?.status ?? null,
+      code: apiError ? otariErrorCode(apiError.headers, apiError.error) : null,
+      headers: apiError?.headers ?? null,
+      timedOut: error instanceof APIConnectionTimeoutError,
+    }, base, started);
+  }
+
+  private recordFailure(
+    { status, code, headers, timedOut }: { status: number | null; code: string | null; headers: Headers | null; timedOut: boolean },
+    base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'>,
+    started: number,
+  ): AiError {
+    const kind = timedOut ? 'timeout' : classify(status, code);
     const activity = recordAiActivity(this.db(), {
       ...base,
       model_served: null,
       provider: null,
       fallback: 0,
       attempt_count: null,
-      request_id: apiError?.headers?.get('otari-request-id') ?? null,
+      request_id: headers?.get('otari-request-id') ?? null,
       guardrail: kind === 'blocked' ? 'blocked' : 'not_reported',
       outcome: OUTCOME[kind],
       http_status: status,
@@ -328,9 +358,97 @@ export class OtariGateway {
     });
     const message = kind === 'failed'
       ? `Otari couldn't complete the request${status ? ` (HTTP ${status})` : ' (no response)'}.`
-      : kind === 'budget' ? otariBudgetMessage(code, apiError?.headers?.get('otari-budget-scope') ?? null)
+      : kind === 'budget' ? otariBudgetMessage(code, headers?.get('otari-budget-scope') ?? null)
         : MESSAGES[kind];
     return new AiError(kind, message, activity);
+  }
+
+  // An MCP tool run through Otari's managed MCP loop on streamed /messages with the MCP client beta, the
+  // one place Otari hands back the raw tool result (an mcp_tool_result block). Chat Completions and
+  // Responses hide MCP activity. Only Otari's tool-use and tool-result blocks are returned: the model's
+  // own text is thrown away, so callers can clean and screen the result before any model reads it.
+  async mcpRun(request: McpRunRequest): Promise<McpRunResult> {
+    const { apiKey, baseUrl } = this.config();
+    if (!apiKey) throw new AiError('not_configured', MESSAGES.not_configured);
+    const started = Date.now();
+    const base: Pick<NewAiActivity, 'feature' | 'lead_id' | 'model_requested'> = {
+      feature: request.feature, lead_id: request.leadId ?? null, model_requested: request.model,
+    };
+    this.checkFaberCap(0.002, base);
+
+    let response: Response;
+    let text: string;
+    try {
+      response = await this.fetchImpl(`${baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Otari-Key': apiKey, 'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01', 'anthropic-beta': 'mcp-client-2025-11-20',
+        },
+        body: JSON.stringify({
+          model: request.model, max_tokens: request.maxTokens, stream: true, max_tool_iterations: 2,
+          mcp_servers: [{ name: request.server.name, url: request.server.url, allowed_tools: request.server.allowedTools, purpose_hint: request.server.purposeHint }],
+          messages: [{ role: 'user', content: request.prompt }],
+        }),
+        signal: AbortSignal.timeout(request.timeoutMs ?? 120_000),
+      });
+      text = await response.text();
+    } catch (error) {
+      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      throw this.recordFailure({ status: null, code: null, headers: null, timedOut }, base, started);
+    }
+
+    const headers = response.headers;
+    if (!response.ok) {
+      let body: unknown = null;
+      try { body = JSON.parse(text); } catch { /* not JSON */ }
+      const inner = asObject(asObject(body)?.error);
+      const code = headers.get('otari-error-code') ?? (typeof inner?.code === 'string' ? inner.code : null) ?? otariErrorCode(undefined, body);
+      throw this.recordFailure({ status: response.status, code, headers, timedOut: false }, base, started);
+    }
+
+    const toolUses: McpRunResult['toolUses'] = [];
+    const toolResults: McpRunResult['toolResults'] = [];
+    let usage: Json | null = null;
+    let streamError: string | null = null;
+    for (const chunk of text.split(/\r?\n\r?\n/)) {
+      const data = chunk.match(/^data: (.*)$/m)?.[1];
+      if (!data) continue;
+      let event: Json | null;
+      try { event = asObject(JSON.parse(data)); } catch { continue; }
+      const block = asObject(event?.content_block);
+      if (block?.type === 'mcp_tool_use') toolUses.push({ name: String(block.name ?? ''), input: asObject(block.input) ?? {} });
+      if (block?.type === 'mcp_tool_result') {
+        const content = Array.isArray(block.content)
+          ? block.content.map((part) => String(asObject(part)?.text ?? '')).join('')
+          : String(block.content ?? '');
+        toolResults.push({ content, isError: block.is_error === true });
+      }
+      if (event?.type === 'message_delta' && asObject(event.usage)) usage = asObject(event.usage);
+      if (event?.type === 'error') streamError = String(asObject(event.error)?.code ?? asObject(event.error)?.message ?? 'stream_error');
+    }
+    if (streamError) throw this.recordFailure({ status: response.status, code: streamError, headers, timedOut: false }, base, started);
+
+    const ran = toolResults.length > 0;
+    const activity = recordAiActivity(this.db(), {
+      ...base,
+      model_served: headers.get('otari-model'),
+      provider: headers.get('otari-provider'),
+      fallback: headers.get('otari-fallback') === 'true' ? 1 : 0,
+      attempt_count: asNumber(headers.get('otari-attempt-count')),
+      request_id: headers.get('otari-request-id'),
+      guardrail: guardrailFrom(headers.get('otari-guardrails')),
+      outcome: ran ? 'ok' : 'error',
+      http_status: response.status,
+      error_code: ran ? null : 'mcp_tool_not_called',
+      prompt_tokens: asNumber(usage?.input_tokens),
+      completion_tokens: asNumber(usage?.output_tokens),
+      reasoning_tokens: null,
+      cost_usd: asNumber(usage?.cost_usd),
+      latency_ms: Date.now() - started,
+    });
+    if (!ran) throw new AiError('empty', "The model didn't call the MCP tool, so there is nothing to read.", activity);
+    return { toolUses, toolResults, activity };
   }
 
   // Faber's own monthly cap (Arcana → Integrations), checked before Otari is called, on top of Otari's

@@ -1,12 +1,12 @@
 import { useState, type KeyboardEvent } from 'react';
-import { Ban, Check, Globe, Pencil, Phone, Plus, RotateCcw, Sparkles, Star, Trash2, Undo2, X } from 'lucide-react';
+import { Ban, Check, Gauge, Globe, Pencil, Phone, Plus, RotateCcw, Sparkles, Star, Trash2, Undo2, X } from 'lucide-react';
 import { call, errorText } from '../../lib/ipc.ts';
 import { cn, formatDateTime, usd } from '../../lib/format.ts';
 import { useLoad } from '../../lib/useLoad.ts';
 import { Button, Checkbox, ConfirmDialog, Drawer, IconButton, Input, ScoreSeal, Select, Skeleton, StatusPill, Textarea, useToast } from '../../ui/index.ts';
 import { canMove, LOST_REASON_LABEL, STAGE_LABEL, STAGES, type LeadStatus } from '../../../shared/pipeline.ts';
 import type { Lead, LeadActivity, WebsiteStatus } from '../../../shared/types.ts';
-import type { NameMatchSuggestion, PitchDraft } from '../../../shared/ai.ts';
+import type { NameMatchSuggestion, PitchDraft, WebsiteAudit } from '../../../shared/ai.ts';
 import { whatsAppLink } from '../../../shared/phone.ts';
 import { VERDICT_LABEL, WebsiteBadge } from './WebsiteBadge.tsx';
 
@@ -368,6 +368,64 @@ function WebsitePanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promis
           <Select value={lead.website_status} onChange={(v) => void correct(v)} options={WEBSITE_OPTIONS} label="Website status" />
         </div>
       </div>
+      {lead.website_url && <AuditBlock lead={lead} onChanged={onChanged} />}
+    </div>
+  );
+}
+
+const QUALITY_LABEL: Record<WebsiteAudit['quality'], string> = { modern: 'Modern', needs_work: 'Needs work', outdated: 'Outdated' };
+
+// Website audit: Google Lighthouse on a phone, through a remote MCP server that Otari connects to.
+// Only the lead's public URL leaves Faber; the result is cleaned and screened before Model A reads it.
+function AuditBlock({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<void> }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  let audit: WebsiteAudit | null = null;
+  try {
+    audit = lead.website_audit ? (JSON.parse(lead.website_audit) as WebsiteAudit) : null;
+  } catch {
+    audit = null;
+  }
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const result = await call('ai:auditWebsite', { leadId: lead.id });
+      if (result.error) toast({ title: 'Audit not saved', description: result.error, tone: 'error' });
+      else toast({ title: `Website audit: ${QUALITY_LABEL[result.audit!.quality]}`, description: `${result.audit!.reason} · ${usd(result.costUsd)}`, tone: 'success' });
+      await onChanged();
+    } catch (err) {
+      toast({ title: 'Audit not saved', description: errorText(err), tone: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 rounded-md border border-border px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-ink">Website audit</span>
+        {audit && <span className="text-xs font-semibold text-ink">{QUALITY_LABEL[audit.quality]}</span>}
+        <Button size="sm" variant="ghost" className="ml-auto" icon={<Gauge className="size-3.5" />} loading={busy}
+          title="Google Lighthouse via an MCP server through Otari; only the site address is sent. About a minute, about $0.002."
+          onClick={() => void run()}>
+          {busy ? 'Auditing… (about a minute)' : audit ? 'Audit again' : 'Audit site'}
+        </Button>
+      </div>
+      {audit && (
+        <>
+          <div className="flex flex-wrap gap-1.5 text-xs tabular">
+            <span className="rounded border border-border px-1.5 py-0.5">Performance {audit.scores.performance ?? '–'}</span>
+            <span className="rounded border border-border px-1.5 py-0.5">Accessibility {audit.scores.accessibility ?? '–'}</span>
+            <span className="rounded border border-border px-1.5 py-0.5">Best practices {audit.scores.bestPractices ?? '–'}</span>
+            <span className="rounded border border-border px-1.5 py-0.5">SEO {audit.scores.seo ?? '–'}</span>
+            {audit.lcpMs !== null && <span className="rounded border border-border px-1.5 py-0.5">Loads in {(audit.lcpMs / 1000).toFixed(1)} s</span>}
+          </div>
+          <p className="text-sm text-ink">{audit.reason}</p>
+          {audit.fixes.length > 0 && <ul className="list-disc pl-4 text-xs text-ink-muted">{audit.fixes.map((fix) => <li key={fix}>{fix}</li>)}</ul>}
+          <span className="text-xs text-ink-muted tabular">Audited {formatDateTime(lead.website_audited_at)} (mobile)</span>
+        </>
+      )}
     </div>
   );
 }

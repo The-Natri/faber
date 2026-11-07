@@ -69,6 +69,9 @@ export interface Lead {
   website_evidence: string | null;
   website_reason: string | null;
   website_checked_at: string | null;
+  // From the website audit (Phase 6): a WebsiteAudit as JSON, and when it ran
+  website_audit: string | null;
+  website_audited_at: string | null;
 }
 
 // 'unknown' means not checked yet, or the check couldn't decide

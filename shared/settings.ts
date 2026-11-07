@@ -73,6 +73,8 @@ export const integrationsSchema = z.object({
   modelVerify: modelName(DEFAULT_MODELS.verify),
   modelPitch: modelName(DEFAULT_MODELS.pitch),
   modelScreener: modelName(DEFAULT_MODELS.screener),
+  // The remote MCP server the website audit uses (Google Lighthouse); it only ever receives the lead's public URL
+  auditMcpUrl: z.url({ protocol: /^https$/, message: 'The audit server URL should start with https://' }).default('https://audit.mrza.ch/mcp'),
   // Website check batches: each lead costs about $0.011 (one web search plus small model calls)
   websiteBatchSize: z.number().int().min(1).max(20).default(5),
   websiteDelaySeconds: z.number().int().min(0).max(60).default(3),

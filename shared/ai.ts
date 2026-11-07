@@ -12,7 +12,7 @@ export const DEFAULT_MODELS = {
   screener: 'openai/gpt-oss-safeguard-20b',
 } as const;
 
-export type AiFeature = 'connection_test' | 'screen' | 'web_search' | 'website_check' | 'name_match' | 'pitch' | 'pipeline_question';
+export type AiFeature = 'connection_test' | 'screen' | 'web_search' | 'website_check' | 'website_audit' | 'name_match' | 'pitch' | 'pipeline_question';
 
 export type AiOutcome = 'ok' | 'blocked' | 'budget' | 'error';
 
@@ -54,7 +54,7 @@ export interface WebsiteCheckState {
 
 // ---- Spend (Phase 4) ----
 
-export type SpendCategory = 'website_check' | 'name_match' | 'pitch' | 'screener' | 'pipeline' | 'other';
+export type SpendCategory = 'website_check' | 'website_audit' | 'name_match' | 'pitch' | 'screener' | 'pipeline' | 'other';
 
 export interface AiSpend {
   // Local calendar month, e.g. "November 2026"
@@ -65,6 +65,33 @@ export interface AiSpend {
   // Faber's own monthly cap from Arcana → Integrations; Faber checks it before every paid call
   capUsd: number;
   capReached: boolean;
+}
+
+// ---- Website audit (Phase 6) ----
+
+// A Google Lighthouse audit of the lead's own site (mobile), run through an MCP server via Otari, plus
+// Model A's reading of it. Only scores, two lab metrics and Lighthouse's own issue titles are kept.
+export interface WebsiteAudit {
+  url: string;
+  scores: { performance: number | null; accessibility: number | null; bestPractices: number | null; seo: number | null };
+  lcpMs: number | null;
+  cls: number | null;
+  issues: string[];
+  quality: 'modern' | 'needs_work' | 'outdated';
+  reason: string;
+  fixes: string[];
+}
+
+export interface WebsiteAuditResult {
+  leadId: number;
+  audit: WebsiteAudit | null;
+  // The website verdict moved to outdated because of this audit
+  markedOutdated: boolean;
+  servedModel: string | null;
+  costUsd: number;
+  requestIds: string[];
+  // Set when the audit could not run or be read; the lead is left unchanged
+  error: string | null;
 }
 
 // ---- Ask your pipeline (Phase 5) ----

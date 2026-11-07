@@ -13,6 +13,7 @@ const lead: Lead = {
   last_updated: '2026-10-02', is_chain: 0, chain_reason: null, tags: ['hot'], starred: 1, lost_reason: null,
   owner_name: 'Ravi Kumar', best_time: 'Evenings', last_contacted_at: '2026-10-05',
   website_url: 'https://cornercafe.example', website_status: 'unknown', website_evidence: null, website_reason: null, website_checked_at: null,
+  website_audit: null, website_audited_at: null,
 };
 
 describe('publicLeadFacts', () => {

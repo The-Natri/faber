@@ -11,6 +11,7 @@ const FEATURE: Record<AiFeature, string> = {
   screen: 'Input screen',
   web_search: 'Web search',
   website_check: 'Website check',
+  website_audit: 'Website audit',
   name_match: 'Name match',
   pitch: 'Pitch draft',
   pipeline_question: 'Pipeline question',
@@ -34,6 +35,7 @@ export function AiActivitySection() {
 
 const CATEGORY_LABEL: Record<SpendCategory, string> = {
   website_check: 'Website check (search + decision)',
+  website_audit: 'Website audit (Lighthouse via MCP)',
   name_match: 'Name match',
   pitch: 'Pitch drafts',
   screener: 'Screener (gpt-oss-safeguard)',
