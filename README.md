@@ -10,6 +10,22 @@ Built for Mozilla's **Developers Wilding: Online** hackathon.
 - First Otari commit: [`f919ca1` feat(ai): integrate Otari gateway](https://github.com/The-Natri/faber/commit/f919ca1d6043c1bc3c57127a554912df6c854d67)
 - Otari feedback, written while building: [OTARI_FEEDBACK.md](OTARI_FEEDBACK.md)
 
+## Otari features used
+
+- **Model routing and fallbacks:** routing policies `faber-verify` and `faber-pitch`, each falling back to Mistral Large 3 on Bedrock; fallback headers logged per call ([gateway.ts](electron/services/ai/gateway.ts))
+- **MCP integrations:** Google Lighthouse audit through a remote MCP server, on streamed `/messages` ([websiteAudit.ts](electron/services/ai/websiteAudit.ts))
+- **Web search:** `otari_web_search` finds a lead's website; only Otari's sources are kept ([websiteCheck.ts](electron/services/ai/websiteCheck.ts), [nameMatch.ts](electron/services/ai/nameMatch.ts))
+- **Code execution:** "Ask your pipeline" runs Python on `/responses` with `code_interpreter` ([pipelineQuestion.ts](electron/services/ai/pipelineQuestion.ts))
+- **Budgets and spending limits:** Otari budgets and spend ceilings, plus Faber's own monthly cap and spend meter from `usage.cost_usd` ([gateway.ts](electron/services/ai/gateway.ts), [activity.ts](electron/services/ai/activity.ts))
+- **Multiple models serving distinct roles:** Model A judges, Model B writes pitches, a separate model screens untrusted text ([shared/settings.ts](shared/settings.ts))
+- **Guardrails:** Lakera Guard organization mandate on every request, plus the `gpt-oss-safeguard-20b` screener ([screener.ts](electron/services/ai/screener.ts))
+- **Open-weight models:** 4, in distinct roles. See [Models](#models).
+
+## Videos
+
+- Demo video: (link coming)
+- Feedback video: (link coming)
+
 ## What the AI does
 
 | Feature | What the user sees | Otari features used |
