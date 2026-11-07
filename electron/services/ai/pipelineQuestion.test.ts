@@ -43,9 +43,9 @@ describe('buildPipelineDataset', () => {
 
     expect(dataset).toMatchObject({ segments: 2, leads: 3 });
     const [header, first, second] = dataset.csv.split('\n');
-    expect(header).toBe('category,city,website_status,stage,score_band,chain,leads,avg_score,avg_rating,avg_reviews,with_phone,with_social,contacted');
-    expect(first).toBe('Cafes,Coimbatore,none,new,60-79,no,2,68,4.2,75,2,0,1');
-    expect(second).toBe('Salons,Chennai,found,new,unscored,no,1,,,,0,0,0');
+    expect(header).toBe('category,city,website_status,stage,score_band,chain,leads,scored,avg_score,rated,avg_rating,reviewed,avg_reviews,with_phone,with_social,contacted');
+    expect(first).toBe('Cafes,Coimbatore,none,new,60-79,no,2,2,68,2,4.2,2,75,2,0,1');
+    expect(second).toBe('Salons,Chennai,found,new,unscored,no,1,0,,0,,0,,0,0,0');
     for (const secret of ['Secret Bakery', '98765', 'Ravi', 'private note', 'Example Street', 'node/']) expect(dataset.csv).not.toContain(secret);
   });
 });

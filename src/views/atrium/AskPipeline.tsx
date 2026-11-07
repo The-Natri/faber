@@ -57,8 +57,11 @@ export function AskPipeline() {
   );
 }
 
+// Python prints floats like 46.70000000000001; show at most two decimals
+const cellText = (cell: string) => (/^-?\d+\.\d{3,}$/.test(cell) ? String(Number(Number(cell).toFixed(2))) : cell);
+
 function AnswerView({ answer }: { answer: PipelineAnswer }) {
-  const table = answer.table;
+  const table = answer.table && { columns: answer.table.columns, rows: answer.table.rows.map((row) => row.map(cellText)) };
   // A simple bar chart when the table is a label column plus one numeric column
   const numeric = table && table.columns.length === 2 && table.rows.every((r) => r[1] !== '' && Number.isFinite(Number(r[1])));
   const max = numeric ? Math.max(...table.rows.map((r) => Number(r[1])), 0) : 0;

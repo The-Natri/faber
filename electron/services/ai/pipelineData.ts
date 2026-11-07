@@ -6,7 +6,7 @@ import type Database from 'better-sqlite3';
 
 export const SEGMENT_COLUMNS = [
   'category', 'city', 'website_status', 'stage', 'score_band', 'chain',
-  'leads', 'avg_score', 'avg_rating', 'avg_reviews', 'with_phone', 'with_social', 'contacted',
+  'leads', 'scored', 'avg_score', 'rated', 'avg_rating', 'reviewed', 'avg_reviews', 'with_phone', 'with_social', 'contacted',
 ] as const;
 
 export interface PipelineDataset {
@@ -32,8 +32,12 @@ export function buildPipelineDataset(db: Database.Database): PipelineDataset {
                 WHEN score >= 40 THEN '40-59' ELSE '0-39' END AS score_band,
            CASE WHEN is_chain = 1 THEN 'yes' ELSE 'no' END AS chain,
            COUNT(*) AS leads,
+           -- Each average comes with how many leads it covers, so segments can be combined correctly
+           COUNT(score) AS scored,
            ROUND(AVG(score), 1) AS avg_score,
+           COUNT(rating) AS rated,
            ROUND(AVG(rating), 2) AS avg_rating,
+           COUNT(review_count) AS reviewed,
            ROUND(AVG(review_count), 1) AS avg_reviews,
            SUM(has_phone) AS with_phone,
            SUM(has_social) AS with_social,
