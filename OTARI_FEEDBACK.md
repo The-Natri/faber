@@ -1,197 +1,185 @@
-# Otari feedback log
+# Otari feedback
 
-Running log of mismatches between the Otari docs and the hosted gateway, found while integrating Otari into Faber for Developers Wilding: Online. Each entry: date, what the docs say, what happened, repro. Cleaned into a write-up in Phase 7.
+Findings from integrating Otari into Faber, a desktop CRM, for Developers Wilding: Online (2026-10-31 to 2026-11-07). Every entry was hit for real while building. Each one gives what the docs say, what happened, a repro, request IDs where a request was made, and its status on 2026-11-07.
 
-- Gateway: hosted EU, `https://eu.api.otari.ai/api/v1`, workspace API key sent as `Otari-Key`.
-- Docs read at mozilla-ai/otari `53ed2d5` (2026-10-31).
-- Repro for every entry: `npm run otari:probe -- <command>` (`scripts/otari-probe.ts`).
+- **Gateway:** hosted EU, `https://eu.api.otari.ai/api/v1`, one workspace API key sent as `Otari-Key`, Default workspace.
+- **Docs read** at mozilla-ai/otari `53ed2d5` (2026-10-31). Source re-checked at `84f0ecd` (2026-11-06) where noted.
+- **Repro:** `npm run otari:probe -- <command>` ([scripts/otari-probe.ts](scripts/otari-probe.ts)) needs `OTARI_API_KEY` in the dev env file. Keys are redacted in all evidence.
 
-## Live mismatches
+## Summary
 
-### 1. 2026-10-31 · Management reads answer a workspace key with "Invalid master key"
+| # | Finding | Kind | Status (2026-11-07) |
+|---|---|---|---|
+| 1 | Management reads answer a workspace key with 401 "Invalid master key" | DX / missing | **Partly fixed:** `GET /key/budget` and `/key/usage/summary` now work ([#2928](https://github.com/mozilla-ai/otari/pull/2928)); the other routes still say "Invalid master key" |
+| 2 | `/tools` says web tools are available while the workspace refuses them | Bug | Reported by others as [#2691](https://github.com/mozilla-ai/otari/issues/2691), closed 2026-11-03 |
+| 3 | Request-level guardrails can't run on hosted; the 502 is operator-facing | Bug / docs | Open as [#2937](https://github.com/mozilla-ai/otari/issues/2937); the profiles route now explains itself |
+| 4 | Reasoning models return empty content when hidden reasoning uses up `max_tokens` | Docs | Open, not filed |
+| 5 | The guardrail catalog lists `any_llm`, which a tenant can never define | Bug / missing | Still listed; the open-weight guardrail request is [#2722](https://github.com/mozilla-ai/otari/issues/2722) |
+| 6 | A routing policy that isn't found gets `invalid_model`, which never mentions policies | DX | Open, draft issue |
+| 7 | **A provider-narrowed spend ceiling refuses the request instead of skipping to the fallback** | **Bug, confirmed** | **Still in source at `84f0ecd`**, draft issue |
+| 8 | A $0 budget behaved like "no limit" | Bug, unconfirmed | Observed once, draft issue |
+| 9 | "All upstream providers timed out" after the first candidate failed with a 400 | DX | Open, draft issue |
+| 10 | Dashboard trace says "a later attempt answered" when the only later attempt failed | Bug (dashboard) | Open, draft issue |
+| 11 | Direct `POST /search` has no search tool on hosted, though in-loop search works | Missing | Open, draft issue |
+| 12 | A guardrail 403 doesn't say which check fired | DX | Open, draft issue |
+| 13 | Lakera blocked a plain instruction to run an MCP tool | Vendor behaviour | Worked around by rewording |
+| 14 | MCP results are only visible on streamed `/messages` with a beta header | Missing | Documented; related [#2745](https://github.com/mozilla-ai/otari/issues/2745) |
+| 15 | Hosted tool prices aren't published | Docs | Open |
+
+## Findings
+
+### 1. Management reads answer a workspace key with "Invalid master key"
 - **Docs** (api-reference.md, Authentication): "Where a tenant needs one of those operations, a separately scoped endpoint serves it to the caller's own organization: `/api/v1/organizations/me/usage`…"
-- **Happened:** with a valid workspace API key (the same key serves chat completions fine), every one of these returns `401 {"detail":"Invalid master key"}`: `/organizations/me/usage/summary`, `/organizations/me/budgets`, `/organizations/me/spend-ceilings`, `/organizations/me/routing-policies`, `/organizations/me/guardrails`, `/tool-settings`, `/workspaces`, `/usage/summary`.
-- **Why it matters:** the key is valid but lacks the authority. The message points at a master key the tenant doesn't have, and the docs don't say whether these `me` routes accept API keys or only dashboard sessions. An app can't read its own spend through the API, so a spend meter has to be rebuilt from the inline `usage.cost_usd`.
-- **Suggestion:** return 403 with a reason like "this route needs a dashboard session or an owner/admin identity; API keys cannot call it", and state it in the docs. Ideally, let a key read its own usage and its own budget's remaining amount.
-- **Repro:** `discover`.
+- **Happened (2026-10-31):** with a valid workspace key that serves chat completions, every one of these returned `401 {"detail":"Invalid master key"}`:
+  - `/organizations/me/usage/summary`, `/organizations/me/budgets`, `/organizations/me/spend-ceilings`
+  - `/organizations/me/routing-policies`, `/organizations/me/guardrails`
+  - `/tool-settings`, `/workspaces`, `/usage/summary`
 
-### 2. 2026-10-31 · `/tools` says web search and fetch are available, but the workspace refuses them
+  An app couldn't read its own spend, so Faber rebuilt a spend meter from the inline `usage.cost_usd` of every call.
+- **Status (retested 2026-11-07):**
+  - **Now working:** `GET /key/budget` returns 200 with the organization ceiling's `remaining_usd` and reset date, and `GET /key/usage/summary` returns 200 with totals and per-model rows. Both came from [#2928](https://github.com/mozilla-ai/otari/pull/2928), merged 2026-11-05, so they arrived after Faber's meter was built.
+  - **Still failing:** every route listed above still answers `401 Invalid master key`.
+- **Suggestion:** return 403 with "API keys can't call this route; use `/key/budget` or `/key/usage/summary`, or a dashboard session". Point to the `/key/*` routes from the `/organizations/me/*` section of api-reference.md.
+- **Repro:** `discover`; `get key/budget`; `get key/usage/summary`.
+
+### 2. `/tools` says web search and fetch are available, but the workspace refuses them
 - **Docs** (tools.md): "Unavailable but recognized tools remain in the response with `"available": false`."
-- **Happened:** `GET /tools` lists `otari_web_search` and `otari_web_fetch` with `"available": true`. A request declaring them gets `403 {"detail":"web search is not enabled for this workspace"}` (search) or `403 {"detail":"web access is not enabled for this workspace"}` (fetch). The hosted deployment apparently runs `web_search_workspace_default: false`, which the docs give as defaulting to `true`, and nothing tells a hosted tenant about it.
-- **Suggestion:** have `/tools` reflect the caller's workspace policy (`available: false, reason: "disabled for this workspace"`). In the hosted getting-started text, mention that web access starts off and is switched on under Tools → Web search.
-- **Retest 2026-10-31, after enabling Tools → Web search in the dashboard:** search and fetch both work (one call each, `otari_tool_calls` lists the query and sources). The `/tools` mismatch still stands for anyone who hasn't enabled web access yet.
-- **Repro:** `discover`, then `search mistralai/mistral-small-4`.
+- **Happened (2026-10-31):** `GET /tools` listed `otari_web_search` and `otari_web_fetch` with `"available": true`. A request declaring them got `403 {"detail":"web search is not enabled for this workspace"}`. It worked after turning on Tools → Web search in the dashboard.
+- **Status:** reported independently as [#2691](https://github.com/mozilla-ai/otari/issues/2691) and closed as completed on 2026-11-03. Not retestable here, since web access is now on for this workspace.
+- **Repro:** `discover`, then `search mistralai/mistral-small-4` on a workspace with web access off.
 
-### 3. 2026-10-31 · Request-level guardrails can't run on hosted, and the error is operator-facing
+### 3. Request-level guardrails can't run on hosted, and the error is operator-facing
 - **Docs** (guardrails.md, "Using a guardrail"): add `"guardrails": [{"profile": "prompt-injection", "mode": "block"}]` to a request.
-- **Happened:** `502 {"detail":"guardrail profile 'prompt-injection' requested but no guardrails service is configured. Set OTARI_GUARDRAILS_URL on the gateway or pass `url` on the guardrail entry."}`. The hosted gateway has no guardrails service, and a tenant can't set `OTARI_GUARDRAILS_URL`. In `monitor` mode the request is served with `Otari-Guardrails: [{"valid":null,"score":null}]`, which fails open as documented but is easy to mistake for "checked and fine". `GET /tool-settings/guardrails/profiles` is 401 for the key, so a tenant can't discover that no profiles exist.
-- **What works instead:** `GET /tool-settings/guardrails/catalog` lists guardrails Otari runs itself: alinia, any_llm, azure_content_safety, azure_prompt_shields, bedrock_guardrails, lakera_guard, openai_moderation, patronus, watsonx_guardian. These are set up as organization definitions and mandates in the dashboard.
-- **Suggestion:** say on guardrails.md that hosted tenants use organization definitions from the catalog, not request-level profiles. Word the 502 for tenants.
+- **Happened (2026-10-31):** `502 {"detail":"guardrail profile 'prompt-injection' requested but no guardrails service is configured. Set OTARI_GUARDRAILS_URL on the gateway or pass `url` on the guardrail entry."}`. A hosted tenant can't set `OTARI_GUARDRAILS_URL`. In `monitor` mode the request is served with `Otari-Guardrails: [{"valid":null,"score":null}]`, which fails open as documented but reads like "checked and fine".
+- **What works:** organization guardrail definitions from `GET /tool-settings/guardrails/catalog`. Faber uses a Lakera Guard mandate.
+- **Status:** open as [#2937](https://github.com/mozilla-ai/otari/issues/2937). Improved since: `GET /tool-settings/guardrails/profiles` was 401 on 2026-10-31 and now answers 200 `{"available":false,"reason":"No guardrails service is configured, so its profiles cannot be listed."}`.
 - **Repro:** `guardrail mistralai/mistral-small-4`.
 
-### 4. 2026-10-31 · Reasoning models return empty content when hidden reasoning uses up `max_tokens`
-- **Happened:** `alibaba/qwen-3.5-397b-a17b` and `z-ai/glm-5.2` answered HTTP 200 with `content: ""` and `completion_tokens: 400` (= `max_tokens`) on a one-sentence prompt. `alibaba/qwen-3.5-35b-a3b` used 652 completion tokens to say "Hello! How can I help you today?".
-- **Why it matters:** budget holds reserve the whole `max_tokens` (access-control.md, "Reservations are taken up front"), so reasoning models need a large `max_tokens`, and that eats budget headroom. The docs give no way to turn reasoning off or cap it on chat completions for these models, or to see the reasoning text.
-- **Suggestion:** document how `reasoning_effort` (or a per-model equivalent) passes through for open-weight reasoning models, and whether reasoning tokens are exposed.
+### 4. Reasoning models return empty content when hidden reasoning uses up `max_tokens`
+- **Happened (2026-10-31):**
+  - `alibaba/qwen-3.5-397b-a17b` and `z-ai/glm-5.2` answered HTTP 200 with `content: ""` and `completion_tokens: 400` (equal to `max_tokens`) on a one-sentence prompt.
+  - `alibaba/qwen-3.5-35b-a3b` used 652 completion tokens to say "Hello! How can I help you today?".
+- **Why it matters:** budget holds reserve the whole `max_tokens` (access-control.md, "Reservations are taken up front"). A reasoning model therefore needs a large `max_tokens`, and that uses up budget headroom. The docs give no way to cap or turn off reasoning on chat completions for these models.
+- **Suggestion:** document how `reasoning_effort` (or a per-model equivalent) passes through for open-weight reasoning models, and whether reasoning text is exposed.
 - **Repro:** `chat alibaba/qwen-3.5-397b-a17b z-ai/glm-5.2`.
 
-### 5. 2026-10-31 · The guardrail catalog offers `any_llm`, which an organization can never define
-- **Docs** (guardrails.md, "Defining a guardrail on an organization"): "`any_llm` is refused outright: it takes no credential of its own…". The dashboard's own picker hides it (`web/src/features/guardrails/builtInCatalog.ts`, `NOT_DEFINABLE`).
-- **Happened:** `GET /tool-settings/guardrails/catalog`, which the docs call "the picker" a tenant reads, lists `any_llm` (vendor Mozilla AI, licence apache-2.0, category `general_judge`) with an empty `create_parameters` and no flag saying it can't be defined. It's also the only entry that looks vendor-free, so a tenant reading the API (not the dashboard) plans around it and only finds the refusal in prose.
-- **Net effect on hosted:** every inference guardrail a tenant can actually run needs a third-party vendor key (Alinia, Azure, Bedrock, Lakera, OpenAI moderation, Patronus, watsonx). There's no way to run an open-weight judge such as `gpt-oss-safeguard-20b` as an Otari guardrail.
-- **Suggestion:** add `definable: false` (with the reason) to catalog rows the store refuses, or leave them out of the tenant read as the dashboard does. A metered `any_llm` that judges with a model from the tenant's own catalog, billed like any request, would make an open-weight guardrail possible on hosted.
+### 5. The guardrail catalog offers `any_llm`, which an organization can never define
+- **Docs** (guardrails.md, "Defining a guardrail on an organization"): "`any_llm` is refused outright: it takes no credential of its own…". The dashboard's picker hides it (`NOT_DEFINABLE` in `web/src/features/guardrails/builtInCatalog.ts`).
+- **Happened:** `GET /tool-settings/guardrails/catalog`, which a tenant reads through the API, lists `any_llm` with empty `create_parameters` and no flag saying it can't be defined. It's the only entry that looks vendor-free, so a tenant planning from the API builds around it.
+- **Net effect on hosted:** every guardrail a tenant can run needs a third-party vendor key. An open-weight judge such as `gpt-oss-safeguard-20b` can't run as an Otari guardrail, so Faber calls it as a normal model and enforces the verdict itself.
+- **Status (2026-11-07):** still listed. The open-weight guardrail request is [#2722](https://github.com/mozilla-ai/otari/issues/2722).
+- **Suggestion:** add `definable: false` with a reason to catalog rows the store refuses, or leave them out of the tenant read.
 - **Repro:** `get tool-settings/guardrails/catalog`.
 
-### 6. 2026-10-31 · A dashboard routing policy answers `400 invalid_model`, and the message never mentions policies
-- **Happened:** policy `faber-verify` (main `mistralai/mistral-small-4`, backup `openai/gpt-oss-120b`) was created in the dashboard. `POST /chat/completions` with `model: "faber-verify"` returned `400 {"detail":"Unknown or unsupported model 'faber-verify'. Send a 'provider:model' selector, an alias, or a model id from the catalog (GET /api/v1/models).","code":"invalid_model"}`.
-- **Cause (confirmed 2026-11-01):** the policy had been saved as `faber-probe-fallback`, not `faber-verify`; key and policy were both in Default workspace. After renaming it, `faber-verify` resolves. An easy mistake that was slow to find because of the next point.
-- **Why it matters:** the error lists selectors, aliases and catalog ids but not routing policies, and doesn't say policies are per workspace. The key can't list policies to check (`401 Invalid master key`, entry 1).
-- **Suggestion:** when the name matches no selector, add "or a routing policy stored in this key's workspace (<workspace name>)". Let a key read the policy names it can resolve.
-- **Repro:** `chat faber-verify`.
+### 6. A routing policy that isn't found answers `invalid_model`, and the message never mentions policies
+- **Happened (2026-10-31):** `model: "faber-verify"` returned `400 {"detail":"Unknown or unsupported model 'faber-verify'. Send a 'provider:model' selector, an alias, or a model id from the catalog (GET /api/v1/models).","code":"invalid_model"}`. The cause was a policy saved under a different name. It was slow to find because the message doesn't mention policies, and the key can't list policies (finding 1).
+- **Suggestion:** when nothing matches, add "or the name of a routing policy in this key's workspace (<workspace>)". Let a key list the policy names it can resolve.
+- **Repro:** `chat <a policy name that doesn't exist>`.
 
-### 7. 2026-11-01 · CONFIRMED: a provider-narrowed spend ceiling refuses the request instead of skipping to the fallback
-- **Setup (dashboard):** routing policy `faber-verify` in Default workspace, main `mistralai/mistral-small-4` (Mistral, `mistral-small-2603`), backup `openai/gpt-oss-120b` (DeepInfra). A budget `force-fallback-test` with a $0.00001 spend limit, and a spend ceiling on it capping Default workspace with **Provider instance `mistral`** (confirmed in the dashboard).
-- **Docs** (routing.md, "What is billed and what the caller sees"): "A fallback is skipped when a budget narrowed to its provider has no room, and the next candidate is tried." `Otari-Fallback` is `true` "whether the first failed or was skipped". access-control.md: a scoped budget "can optionally narrow the limit to one provider".
-- **Happened:** `403 budget_exceeded`. The backup was never tried. Full redacted exchange:
+### 7. CONFIRMED: a provider-narrowed spend ceiling refuses the request instead of skipping to the fallback
+- **Setup (dashboard):**
+  - Policy `faber-verify`: main Mistral Small 4 on Mistral (`mistral-small-2603`), backup `openai/gpt-oss-120b` on DeepInfra.
+  - Budget `force-fallback-test`, limit $0.00001, with a spend ceiling on Default workspace narrowed to **provider instance `mistral`**.
+- **Docs** (routing.md, "What is billed and what the caller sees"): "A fallback is skipped when a budget narrowed to its provider has no room, and the next candidate is tried." access-control.md says a scoped budget "can optionally narrow the limit to one provider".
+- **Happened (2026-11-01):** `403 budget_exceeded`, and the backup was never tried:
   ```json
   {
-    "request": {
-      "method": "POST", "url": "https://eu.api.otari.ai/api/v1/chat/completions",
-      "headers": { "Otari-Key": "[REDACTED]", "Content-Type": "application/json" },
+    "request": { "method": "POST", "url": "https://eu.api.otari.ai/api/v1/chat/completions",
       "body": { "model": "faber-verify", "max_tokens": 120,
-                "messages": [{ "role": "user", "content": "In one sentence, what does a small local bakery gain from having a website?" }] }
-    },
-    "response": {
-      "status": 403,
+                "messages": [{ "role": "user", "content": "In one sentence, what does a small local bakery gain from having a website?" }] } },
+    "response": { "status": 403,
       "headers": { "otari-request-id": "06c2ec9d-846e-42db-aee4-f82f6500c093", "otari-error-code": "budget_exceeded", "otari-budget-scope": "workspace" },
-      "body": { "detail": "Workspace has $0.00001 of budget remaining, less than this request's estimated cost of $0.000076. The estimate assumes 120 output tokens; a lower output token limit on the request may let it fit", "code": "budget_exceeded" }
-    }
+      "body": { "detail": "Workspace has $0.00001 of budget remaining, less than this request's estimated cost of $0.000076. The estimate assumes 120 output tokens; a lower output token limit on the request may let it fit", "code": "budget_exceeded" } }
   }
   ```
-  No `Otari-Fallback`, `Otari-Model`, `Otari-Provider` or `Otari-Attempt-Count` headers: no candidate was called. Not charged.
-- **Why, from the source** (`53ed2d5`, `api/routes/_pipeline.py`): before any candidate runs, the pipeline takes the up-front hold against `plan.head` (`reserve_budget(..., scope=BudgetScopeRequest(provider_instance=gate_instance))` with `gate_instance = head.instance`) and re-raises a refusal as the response. The documented skip exists only in `move_reservation_for_attempt`, which runs per attempt *after* that hold. A provider-only ceiling with no room therefore refuses the whole request when it binds the **first** candidate; only later candidates can be skipped.
-- **Also:** the refusal says "Workspace has $0.00001 of budget remaining" without naming the provider the ceiling is narrowed to, so a caller can't tell a provider-only cap from a workspace-wide one.
-- **Suggestion:** take the up-front hold only on ceilings that bind every candidate (or on the first candidate that has room), so a provider-only ceiling on the head skips it like any other candidate. Name the provider in a provider-narrowed refusal.
+  The response had no `Otari-Fallback`, `Otari-Model`, `Otari-Provider` or `Otari-Attempt-Count` header, so no candidate was called. Not charged.
+- **Cause, from the source:** the up-front hold is taken on the plan's head candidate before any attempt runs. At `84f0ecd` (2026-11-06), `src/gateway/api/routes/_pipeline.py` lines ~3163–3190:
+  - `reserve_budget(..., scope=BudgetScopeRequest(provider_instance=gate_instance))`, with `gate_instance = plan.head.instance`.
+  - A refusal moves on to the next offering only when `plan.automatic` is set (catalog-id routing), via `if plan is None or plan.automatic is None or ...: raise`.
+
+  So for a routing policy, a provider-only ceiling on the **first** candidate refuses the whole request. The documented skip only reaches later candidates (`move_reservation_for_attempt`).
+- **Also:** the refusal says "Workspace has $0.00001 of budget remaining" without naming the provider the ceiling is narrowed to.
+- **Suggestion:** give routing-policy plans the same skip on a head refusal that automatic plans already have. Name the provider in a provider-narrowed refusal.
+- **Evidence:** `forced-fallback-2026-11-01.json` (Faber's private evidence folder; redacted copy above).
 - **Repro:** create the ceiling above, then `chat faber-verify --evidence=<file>`.
 
-### 8. 2026-11-01 · A $0 budget behaved like "no limit" (observed; the source says it should refuse)
-- **Happened:** with the same ceiling (Default workspace, provider instance `mistral`) on a budget saved with a **$0** spend limit, the request was served on Mistral as if no ceiling existed: `HTTP 200`, `Otari-Request-ID: 6fc37305-8bcc-4c69-9340-2c25275ddfe5`, `Otari-Provider: mistral`, `Otari-Model: mistral-small-2603`, `Otari-Fallback: false`, `Otari-Attempt-Count: 1`, `cost_usd: "0.000026"`. Changing **only** the limit to $0.00001 made the next identical request return the 403 in entry 7.
-- **Source** (`53ed2d5`) says $0 should refuse: the dashboard sends `0` (`OrganizationBudgetDialog.tsx`, `parseLimit` keeps 0 and `amount ?? null` keeps it), the API accepts it (`max_budget: ... ge=0`), `to_usd_or_none` stores it, and the hold SQL admits only `cap IS NULL OR (committed < cap AND committed + held <= cap)`, which is false for a cap of 0.
-- **So either** the hosted build differs from `53ed2d5`, or the $0 was stored as "no limit" somewhere the source doesn't show. Not confirmed which.
-- **Why it matters:** "$0" reads as "nothing may be spent" (a kill switch), and it silently allowed spending.
+### 8. A $0 budget behaved like "no limit" (observed once; the source says it should refuse)
+- **Happened (2026-11-01):** the ceiling was the same as in finding 7, but on a budget saved with a **$0** limit. The request was served on Mistral as if there were no ceiling: HTTP 200, `Otari-Request-ID: 6fc37305-8bcc-4c69-9340-2c25275ddfe5`, `Otari-Provider: mistral`, `Otari-Fallback: false`, `cost_usd: "0.000026"`. Changing **only** the limit to $0.00001 made the next identical request return finding 7's 403.
+- **Source (`53ed2d5`) says $0 should refuse:**
+  - The dashboard sends `0` (`OrganizationBudgetDialog.tsx`).
+  - The API accepts it (`ge=0`).
+  - The hold SQL admits only `cap IS NULL OR (committed < cap AND committed + held <= cap)`, which is false for a cap of 0.
+
+  Either the hosted build differed, or the $0 was stored as "no limit". Not confirmed which.
+- **Why it matters:** "$0" reads as a kill switch, and here it allowed spending.
 - **Suggestion:** treat 0 as a hard stop everywhere (or refuse 0 in the form with "leave blank for no limit"), and show the saved cap on the ceiling's row.
 
-### 9. 2026-11-01 · Fallback fires on a 400, but the backup (DeepInfra `gpt-oss-120b`) times out, and the 504 says "All upstream providers timed out"
-- **Docs** (routing.md, "Selection and failure are separate"): `on_failure` is tried "whatever the provider's error: an outage, a rate limit, or a request it refuses as invalid (400) all move on".
-- **Trigger:** the OpenAI-standard `seed` field. any-llm 1.41.0's Mistral adapter forwards every `CompletionParams` field to `mistralai` 3.1.0's `chat.complete_async`, which has `random_seed` but no `seed` and no `**kwargs`. So the Mistral attempt fails with "unexpected keyword argument 'seed'", which Otari maps to a 400 (`_pipeline.py`, `_rejected_param`).
-- **Happened, twice:** `HTTP 504 {"detail":"All upstream providers timed out"}`, `Otari-Error-Retryable: true` (`Otari-Request-ID` `1ff48ef4-82ff-4891-ab57-9dbf121f7568`, 5.27 s; `4c0dce3a-b459-4bdd-b5e3-ae1a42f5c2fb`, 8.19 s). No cost.
-- **The dashboard's own trace confirms the fallback fired:** routing plan `faber-verify`: #1 `mistral` (the policy's default target) failed **400** after 102 ms, then fell back; #2 `openai/gpt-oss-120b` on **DeepInfra** failed **504** after 8.19 s. No tokens and no charge recorded on either attempt. So routing behaves as documented; the backup provider is what failed.
-- **Same backup, direct:** `model: "openai/gpt-oss-120b"` (catalog id, which tries the model's offerings in turn) answered `HTTP 200` with `Otari-Provider: ovhcloud`, `Otari-Model: gpt-oss-120b`, `Otari-Fallback: true`, `Otari-Attempt-Count: 2`, `Otari-Response-Duration-Ms: 7938` (`Otari-Request-ID: a1cd3678-465b-4731-8751-6b2c765ea6e7`, `cost_usd: "0.000042"`, 0 reasoning tokens). The first offering failed again; the cheapest offering, DeepInfra, comes first in catalog order.
-- **Timeouts:** configuration.md documents no per-attempt timeout near these figures: `provider_request_timeout_seconds` defaults to 600, with **connecting capped at 5 s** for OpenAI-compatible providers (DeepInfra among them). The 5.27 s attempt fits that connect cap; 8.19 s may be the cap plus a retry. Not confirmable from outside, since the hosted settings aren't visible.
-- **DX note:** the 504 reads "All upstream providers timed out" although the first candidate failed with a 400, not a timeout. Something like "The last candidate timed out (1 earlier candidate was refused)" would point at the real failure without reading the trace.
-- **Request** (key redacted): `POST /api/v1/chat/completions`, body `{"model":"faber-verify","max_tokens":200,"messages":[{"role":"user","content":"In one sentence, what does a small local bakery gain from having a website?"}],"seed":7}`.
-- **Resolved for Faber (2026-11-01):** the backup was moved to Mistral Large 3 on Bedrock, and the same forced fallback is served there (see "Confirmed working").
-- **Repro:** `chat faber-verify --max=200 --extra={"seed":7} --evidence=<file>` (with the DeepInfra backup); `chat openai/gpt-oss-120b --max=200`.
+### 9. "All upstream providers timed out" when the first candidate failed with a 400
+- **Docs** (routing.md, "Selection and failure are separate"): `on_failure` is tried "whatever the provider's error: an outage, a rate limit, or a request it refuses as invalid (400)".
+- **Trigger:** the OpenAI-standard `seed` field. Mistral's SDK has `random_seed`, not `seed`, so the Mistral attempt fails with a 400.
+- **Happened (2026-11-01, twice):** `504 {"detail":"All upstream providers timed out"}`, request IDs `1ff48ef4-82ff-4891-ab57-9dbf121f7568` (5.27 s) and `4c0dce3a-b459-4bdd-b5e3-ae1a42f5c2fb` (8.19 s). Not charged. The dashboard trace shows routing worked as documented: #1 `mistral` failed **400** after 102 ms, then #2 `gpt-oss-120b` on DeepInfra failed **504**.
+- **DX problem:** the message says every provider timed out, but the first one refused the request. Something like "The last candidate timed out (1 earlier candidate refused the request with a 400)" would point at both failures.
+- **Resolved for Faber:** the backup moved to Mistral Large 3 on Bedrock. The same request now falls back and is served (see "What worked well").
+- **Repro:** `chat faber-verify --max=200 --extra={"seed":7}`, with a DeepInfra `gpt-oss-120b` backup.
 
-### 10. 2026-11-01 · The trace's "Where the gateway stepped in" says "a later attempt answered" when the only later attempt failed
-- **Where:** dashboard → Overview → Sessions → trace for `4c0dce3a-b459-4bdd-b5e3-ae1a42f5c2fb`.
-- **Happened:** the routing plan on the same trace shows #1 `mistral` failed 400 and #2 `openai/gpt-oss-120b` (DeepInfra) failed 504, and the request ended in 504 "All upstream providers timed out". The "Where the gateway stepped in" panel still says **"a later attempt answered"**.
-- **Why it matters:** the panel contradicts the routing plan beside it, and tells a reader a fallback rescued a request that failed. dashboard.md says the panel shows "where the gateway stepped in"; it should only say a later attempt answered when one did.
-- **Suggestion:** word the step-in from the final outcome ("fell back; the fallback also failed (504)").
+### 10. The dashboard trace says "a later attempt answered" when the only later attempt failed
+- **Where:** dashboard → Overview → Sessions → the trace for `4c0dce3a-b459-4bdd-b5e3-ae1a42f5c2fb`.
+- **Happened:** the routing plan on the trace shows #1 failed 400 and #2 failed 504, and the request ended in 504. The "Where the gateway stepped in" panel beside it still says **"a later attempt answered"**.
+- **Suggestion:** word the panel from the final outcome, for example "fell back; the fallback also failed (504)".
 
-### 11. 2026-11-01 · Direct search (`POST /search`) has no search tool on hosted, though in-loop search works
-- **Docs** (api-reference.md, "Search"; tools.md, "Direct search"): `POST /api/v1/search` runs a configured search tool directly; "a SearXNG search tool can reuse `web_search_url`, so model-initiated and direct search can share one backend".
-- **Happened:** with web search enabled for the workspace (in-loop `otari_web_search` works and costs $0.01), `POST /api/v1/search` `{"query":"Mozilla.ai official website","max_results":5,"max_tokens_per_page":120}` answers `400 {"detail":"No search tools are configured. Add one on the dashboard's Tools & Guardrails page (or POST /api/v1/search-tools), or declare one under 'search_tools' in your config file, supplied directly or through OTARI_CONFIG_YAML / OTARI_CONFIG_B64."}` (`Otari-Request-ID: 04af0a15-4f4f-4510-ae27-62dfe9fb9f08`, not charged).
-- **Why it matters:** direct search is the way to get results *without* a model reading them first, which is what an app that screens untrusted text before any model sees it wants. On hosted, the only way in is a vendor search key (Tavily, Brave, Exa) on the workspace. The message also points a hosted tenant at a config file and environment variables they can't set.
-- **Faber's workaround:** one small model call with `otari_web_search` (`max_uses: 1`) whose text is thrown away; only the `sources` Otari reports in `otari_tool_calls` are kept, then screened before Model A reads them.
-- **Suggestion:** let direct search use the same hosted backend as the in-loop tool (priced the same), or say on the hosted docs that direct search needs a workspace search key, and word the 400 for tenants.
+### 11. Direct search (`POST /search`) has no search tool on hosted, though in-loop search works
+- **Docs** (api-reference.md, "Search"; tools.md, "Direct search"): `POST /api/v1/search` runs a configured search tool directly.
+- **Happened (2026-11-01):** with web search enabled (in-loop `otari_web_search` works), `POST /api/v1/search` answered `400 {"detail":"No search tools are configured. Add one on the dashboard's Tools & Guardrails page (or POST /api/v1/search-tools), or declare one under 'search_tools' in your config file, supplied directly or through OTARI_CONFIG_YAML / OTARI_CONFIG_B64."}`. Request ID: `04af0a15-4f4f-4510-ae27-62dfe9fb9f08`. Not charged.
+- **Why it matters:**
+  - Direct search is the way to get results *without* a model reading them first. That's exactly what an app that screens untrusted text wants.
+  - On hosted, the only way in is a vendor search key on the workspace.
+  - The message points a tenant at config files and environment variables they can't set.
+- **Faber's workaround:** one small model call with `otari_web_search` (`max_uses: 1`). Its text is thrown away; only the `sources` from `otari_tool_calls` are kept, then cleaned and screened. This costs about $0.0102 per lookup, where a direct search would cost $0.01 with no model in the loop.
+- **Suggestion:** let direct search use the hosted in-loop backend at the same price, or document that it needs a workspace search key, and word the 400 for tenants.
 - **Repro:** `dsearch Mozilla.ai official website`.
 
-### 12. 2026-11-01 · A mandated guardrail's 403 doesn't say which check fired, so a false positive can't be told apart
-- **Happened:** the org's Lakera mandate (prompt defense and PII on; name, link and moderation detectors off) blocked a screening request whose latest user message was the cleaned text of an ordinary bakery shop's home page (phone numbers and emails already redacted): `403 {"detail":{"message":"Request blocked by guardrail policy.","code":"guardrail_violation","guardrails":[{"profile":"lakera-faber","explanation":null,"score":1}]}}`. The same flow passed nine other business pages and listings.
-- **Why it matters:** with `explanation: null` and no detector name, a tenant can't tell a prompt-injection hit from a PII hit, or decide whether to tune the Lakera policy or their own text cleaning. guardrails.md keeps the vendor's words out of the response on purpose; the detector *category* would be enough.
+### 12. A mandated guardrail's 403 doesn't say which check fired
+- **Happened (2026-11-01):** the org's Lakera mandate (prompt defense and PII on) blocked a screening request. The latest user message was the cleaned text of an ordinary bakery's home page, with phone numbers and emails already removed. Response: `403 {"detail":{"message":"Request blocked by guardrail policy.","code":"guardrail_violation","guardrails":[{"profile":"lakera-faber","explanation":null,"score":1}]}}`. Request ID: `caaaf70b-dac8-497c-9775-5d4c7889b32f`. The same flow passed other business pages.
+- **Why it matters:** with `explanation: null` and no detector name, a tenant can't tell a prompt-injection hit from a PII hit. So they can't decide whether to tune the vendor policy or their own text cleaning.
 - **Suggestion:** pass the triggered category (for example `prompt_attack`, `pii/phone_number`) through in `guardrails[].explanation` or a new field, without the vendor's raw message.
 
-## Prices measured (hosted EU, 2026-10-31; not found in the docs)
-- Every gateway tool call is a flat **$0.01** on top of model tokens: web search $0.010000 (total $0.010568 = 3,597 input + 47 output tokens on `mistral-small-4` + $0.01), web fetch $0.010000 (total $0.010182), code execution ≈ $0.01 (total $0.010156). tools.md explains how rates are set ("dollars per call") but the hosted price list isn't published. A tenant can only find it by spending.
-- A web search also feeds ~3.6k tokens of results back as model input.
-- Faber's website check, measured on 10 leads (2026-11-01): $0.0105 per lead on average (search step $0.0102, screen $0.0001, decision $0.0002); re-checking a lead whose site is known, without a search, $0.00015.
-- **Suggestion:** publish the hosted tool rates, and return a per-tool line in `usage` (tools.md describes a "pricing breakdown" on the usage row, but the inline `usage` carries only the total).
+### 13. Lakera blocked a plain instruction to run an MCP tool
+- **Happened (2026-11-07):** a streamed `/messages` request with the Lighthouse MCP server was blocked with 403 `guardrail_violation` before any model ran ($0). Request ID: `a53756fb-4d47-4db1-be49-df598cbc720f`. The user message read: "Call run_lighthouse exactly once … then reply with the single word: done".
+- **Rewording fixed it:** "Please run a mobile Lighthouse audit of the website <url>." passes, and has on every audit since (`a10bf5a9-54e1-40c6-985d-bc765f7547b1`).
+- **Why it matters:** an app's *own* instruction-like wording reads as prompt injection to the vendor model. Since the 403 carries no category (finding 12), the only way to learn this is trial and error.
+- **Suggestion:** same as 12. Docs could also note that a mandate screens the app's own prompt text, not only third-party content.
 
-## Confirmed working (and known issues retested)
-- **Routing policy fallback, proven (2026-11-01).** Policy `faber-verify` in Default workspace: main `mistral-small-2603` (Mistral), backup Mistral Large 3 pinned to **Amazon Bedrock**. The OpenAI-standard `seed` field makes the Mistral attempt fail with a 400 (Mistral SDK has `random_seed`, not `seed`); Bedrock ignores the field; the policy moves on as routing.md documents. Full redacted exchange:
-  ```json
-  {
-    "at": "2026-11-01T03:54:54.084Z",
-    "request": {
-      "method": "POST",
-      "url": "https://eu.api.otari.ai/api/v1/chat/completions",
-      "headers": {
-        "Otari-Key": "[REDACTED]",
-        "Content-Type": "application/json"
-      },
-      "body": {
-        "model": "faber-verify",
-        "max_tokens": 60,
-        "messages": [
-          {
-            "role": "user",
-            "content": "In one sentence, what does a small local bakery gain from having a website?"
-          }
-        ],
-        "seed": 7
-      }
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "otari-request-id": "22f7fa2d-26a3-445b-a7b9-e3909111b5f2",
-        "otari-provider": "bedrock",
-        "otari-model": "mistral.mistral-large-3-675b-instruct",
-        "otari-fallback": "true",
-        "otari-attempt-count": "2",
-        "otari-response-duration-ms": "1777"
-      },
-      "body": {
-        "id": "",
-        "choices": [
-          {
-            "finish_reason": "stop",
-            "index": 0,
-            "message": {
-              "content": "A small local bakery gains **increased visibility, customer convenience, and sales opportunities** by showcasing its products, sharing location/hours, and enabling online orders or pre-orders through a website.",
-              "role": "assistant",
-              "refusal": null
-            },
-            "logprobs": null
-          }
-        ],
-        "created": 0,
-        "model": "faber-verify",
-        "object": "chat.completion",
-        "usage": {
-          "completion_tokens": 42,
-          "prompt_tokens": 20,
-          "total_tokens": 62,
-          "cost_usd": "0.000073",
-          "pricing_source": "deployment"
-        }
-      }
-    }
-  }
-  ```
-  The same policy without `seed` is served by the main model: `Otari-Provider: mistral`, `Otari-Model: mistral-small-2603`, `Otari-Fallback: false`, `Otari-Attempt-Count: 1`, `cost_usd: "0.000017"` (request `e374ef67-293c-4c55-bb27-530bbd404f9f`). Repro: `chat faber-verify --max=60 --extra={"seed":7} --evidence=<file>`.
-- **Forced fallback on `faber-pitch`: not reproducible with request params (2026-11-01).** Policy `faber-pitch`: main DeepSeek V4 Pro (DeepInfra), backup Mistral Large 3 (Bedrock). The `seed` trick that broke the Mistral main doesn't apply (DeepInfra takes `seed`), and two harmless parameters meant to make DeepInfra refuse were served by the main with `Otari-Fallback: false`: `logit_bias` with an out-of-vocabulary token id (request `725e07d9-e517-4ebc-a4be-8066c5e20775`) and `stream_options` on a non-streaming call (`4e281a13-8ea5-4161-91f2-bbe499bad59d`). Either Otari drops such fields before dispatch or DeepInfra ignores them; neither is documented. The routing fallback itself is the one proven on `faber-verify` above. A documented way to force it without request params is a per-model rate-limit rule (routing.md, "Spill over"), which a full model is skipped by.
-- **#2705, base path:** `GET https://eu.api.otari.ai/v1/models` returns `404 {"detail":"Otari serves its API under /api/v1, not /v1. Use /api/v1/models instead."}`. The current docs (api-reference.md) document `/api/v1` correctly; the excellent error message makes the old path self-correcting.
-- **#2705, models list omits callable models:** `deepseek/deepseek-v4-pro-0813` now appears in `/models` (117 models). Not reproducible on 2026-10-31.
-- **#2719, code execution 402 on hosted:** fixed. `otari_code_execution` on chat completions and `code_interpreter` on `/responses` (`Otari-Code-Execution: otari`) both ran. `/responses` returned the executed code and its output.
-- **`Otari-Key` header** works with the OpenAI Node SDK. The SDK's `Authorization` header is removed by setting it to `null` in `defaultHeaders`.
-- **Response headers** `Otari-Provider`, `Otari-Model`, `Otari-Fallback` and `Otari-Attempt-Count`, plus inline `usage.cost_usd`, arrive as documented.
-- **Automatic cross-provider fallback on a catalog id:** `model: "openai/gpt-oss-120b"` with its first offering failing was served by the next one (`Otari-Provider: ovhcloud`, `Otari-Fallback: true`, `Otari-Attempt-Count: 2`) with no policy configured (request `a1cd3678-465b-4731-8751-6b2c765ea6e7`, 2026-11-01).
-- **Inline `mcp_servers`** with a public streamable-HTTP server (DeepWiki) works with a workspace key.
-- **Web search and fetch** work once enabled in the dashboard, with sources reported in `otari_tool_calls`.
-- **Catalog rows carry `usage_30d.spend_usd` per offering**, readable with a workspace key. It's the only spend figure a key can read (the usage API is closed to it, entry 1). Model tokens only; tool charges aren't on these rows.
+### 14. MCP results are only visible on streamed `/messages` with a beta header
+- **Docs** (mcp.md, "Messages streaming activity"; tools.md, "What clients receive"): Chat Completions and Responses "continue to hide this activity". Only streamed `/messages` with `anthropic-beta: mcp-client-2025-11-20` emits `mcp_tool_use` and `mcp_tool_result` blocks.
+- **Happened:** as documented. Faber is built on the OpenAI SDK, so the website audit needed a hand-written SSE client for `/api/v1/messages` just to read the tool's raw result. Without it, Faber couldn't check which URL the model audited or keep the model from paraphrasing the numbers.
+- **Suggestion:** report MCP calls (name, input, result) in `otari_tool_calls` on Chat Completions, as search and fetch already are, and in non-streamed `/messages`. Related: [#2745](https://github.com/mozilla-ai/otari/issues/2745).
 
-## Notes from reading the docs (not bugs, possible DX feedback)
-- **Code execution is invisible on Chat Completions** (tools.md, "What clients receive"): code runs and MCP calls are not reported in `otari_tool_calls`; only the final message returns. Showing the code needs `/responses` or `/messages`. Suggestion: report code runs in `otari_tool_calls` too, as search and fetch already are.
-- **Guardrails are input-only** (guardrails.md): checks run before the provider is called, and policy mandates are "only input checks". Suggestion: say so in the page's first paragraph.
+### 15. Hosted tool prices aren't published
+- **Measured on hosted EU:**
+  - Each web search, web fetch or code-execution run is a flat **$0.01** on top of model tokens. A search also feeds about 3.6k tokens of results back as input.
+  - An "Ask your pipeline" answer cost $0.011006 in total (`041323b4-7b25-4a89-b5e3-2d34ba023ae0`).
+  - A gateway-run **MCP call carried no per-call charge**: a full Lighthouse audit cost $0.0006–0.0009 in tokens.
+- **Why it matters:** tools.md explains how rates are set, but the hosted rates aren't listed anywhere, and the inline `usage` gives only a total.
+- **Suggestion:** publish the hosted tool rates, and add a per-tool line to the inline `usage`.
+
+## What worked well
+
+- **Routing-policy fallback is real and visible.** Policy `faber-verify` with the `seed` trick: Mistral refused with a 400, and Mistral Large 3 on Bedrock answered. The response had `Otari-Fallback: true`, `Otari-Attempt-Count: 2`, `Otari-Provider: bedrock`, `Otari-Model: mistral.mistral-large-3-675b-instruct`, request `22f7fa2d-26a3-445b-a7b9-e3909111b5f2`, $0.000073. Without `seed`, the main model answers (`e374ef67-293c-4c55-bb27-530bbd404f9f`). Faber shows these headers per call in its AI Activity view.
+- **Catalog-id fallback with no setup.** `model: "openai/gpt-oss-120b"` moved from a failing offering to OVHcloud by itself (`a1cd3678-465b-4731-8751-6b2c765ea6e7`).
+- **Response headers and inline cost.** `Otari-Model`, `Otari-Provider`, `Otari-Fallback`, `Otari-Attempt-Count`, `Otari-Request-ID`, `Otari-Guardrails` and `usage.cost_usd` were enough to build a per-call log and a monthly spend meter without any other API.
+- **Lakera Guard as an org mandate.** One dashboard setting screens every request from every key, with no code in the app. It blocked a real injection test (`24ed516c-db77-4ea9-87bb-d67d05866abf`), and the block costs nothing.
+- **Code execution on `/responses`.** Python ran on an anonymised CSV and returned the code and its stdout as `code_interpreter_call` items, so Faber can show the user exactly what was computed. The answers matched SQL. [#2719](https://github.com/mozilla-ai/otari/issues/2719) (402 on hosted) is fixed.
+- **Managed MCP with an inline public server.** One `mcp_servers` entry, no registration, and Otari ran a remote Lighthouse server for the cost of the tokens.
+- **The `Otari-Key` header works with the OpenAI Node SDK.** Setting `Authorization: null` in `defaultHeaders` is the only change needed.
+- **Error messages that teach.** `GET /v1/models` answers 404 "Otari serves its API under /api/v1, not /v1". Budget refusals give the estimate and suggest a lower `max_tokens`.
+- **Responsive upstream.** A key budget and usage read was asked for by another participant, and it shipped within the week ([#2928](https://github.com/mozilla-ai/otari/pull/2928)).
+
+## What's missing
+
+- **A way to force a routing-policy fallback for testing** without request-parameter tricks. On `faber-pitch`, DeepInfra accepted every parameter Faber tried (`logit_bias` with an out-of-vocabulary token, `stream_options` without streaming), so its fallback couldn't be shown. Requests: `725e07d9-e517-4ebc-a4be-8066c5e20775`, `4e281a13-8ea5-4161-91f2-bbe499bad59d`. A header like `Otari-Skip-Candidate: 1` on test keys would make fallbacks demonstrable.
+- **An open-weight guardrail on hosted** ([#2722](https://github.com/mozilla-ai/otari/issues/2722)). Faber runs `gpt-oss-safeguard-20b` as a second screen itself, because no keyless guardrail exists.
+- **Output guardrails.** Mandates are input-only (guardrails.md), so model output is checked by app code (Faber's pitch checks).
+- **Tool results on Chat Completions** for MCP and code execution (finding 14).
+- **Direct search on hosted** (finding 11).
+- **A detector category on guardrail blocks** (findings 12 and 13).
+- **Published hosted tool prices** and a per-tool cost line (finding 15).
