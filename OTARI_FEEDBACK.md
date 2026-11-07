@@ -15,14 +15,14 @@ Findings from integrating Otari into Faber, a desktop CRM, for Developers Wildin
 | 3 | Request-level guardrails can't run on hosted; the 502 is operator-facing | Bug / docs | Open as [#2937](https://github.com/mozilla-ai/otari/issues/2937); the profiles route now explains itself |
 | 4 | Reasoning models return empty content when hidden reasoning uses up `max_tokens` | Docs | Open, not filed |
 | 5 | The guardrail catalog lists `any_llm`, which a tenant can never define | Bug / missing | Still listed; the open-weight guardrail request is [#2722](https://github.com/mozilla-ai/otari/issues/2722) |
-| 6 | A routing policy that isn't found gets `invalid_model`, which never mentions policies | DX | Open, draft issue |
-| 7 | **A provider-narrowed spend ceiling refuses the request instead of skipping to the fallback** | **Bug, confirmed** | **Still in source at `84f0ecd`**, draft issue |
-| 8 | A $0 budget behaved like "no limit" | Bug, unconfirmed | Observed once, draft issue |
-| 9 | "All upstream providers timed out" after the first candidate failed with a 400 | DX | Open, draft issue |
-| 10 | Dashboard trace says "a later attempt answered" when the only later attempt failed | Bug (dashboard) | Open, draft issue |
-| 11 | Direct `POST /search` has no search tool on hosted, though in-loop search works | Missing | Open, draft issue |
-| 12 | A guardrail 403 doesn't say which check fired | DX | Open, draft issue |
-| 13 | Lakera blocked a plain instruction to run an MCP tool | Vendor behaviour | Worked around by rewording |
+| 6 | A routing policy that isn't found gets `invalid_model`, which never mentions policies | DX | Filed as [#2986](https://github.com/mozilla-ai/otari/issues/2986) |
+| 7 | **A provider-narrowed spend ceiling refuses the request instead of skipping to the fallback** | **Bug, confirmed** | **Still in source at `84f0ecd`**, filed as [#2981](https://github.com/mozilla-ai/otari/issues/2981) |
+| 8 | A $0 budget behaved like "no limit" | Bug, unconfirmed | Observed once, not filed |
+| 9 | "All upstream providers timed out" after the first candidate failed with a 400 | DX | Filed as [#2983](https://github.com/mozilla-ai/otari/issues/2983) |
+| 10 | Dashboard trace says "a later attempt answered" when the only later attempt failed | Bug (dashboard) | Filed as [#2984](https://github.com/mozilla-ai/otari/issues/2984) |
+| 11 | Direct `POST /search` has no search tool on hosted, though in-loop search works | Missing | Filed as [#2985](https://github.com/mozilla-ai/otari/issues/2985) |
+| 12 | A guardrail 403 doesn't say which check fired | DX | Filed as [#2982](https://github.com/mozilla-ai/otari/issues/2982) |
+| 13 | Lakera blocked a plain instruction to run an MCP tool | Vendor behaviour | Worked around by rewording; covered by [#2982](https://github.com/mozilla-ai/otari/issues/2982) |
 | 14 | MCP results are only visible on streamed `/messages` with a beta header | Missing | Documented; related [#2745](https://github.com/mozilla-ai/otari/issues/2745) |
 | 15 | Hosted tool prices aren't published | Docs | Open |
 
@@ -75,6 +75,7 @@ Findings from integrating Otari into Faber, a desktop CRM, for Developers Wildin
 - **Happened (2026-10-31):** `model: "faber-verify"` returned `400 {"detail":"Unknown or unsupported model 'faber-verify'. Send a 'provider:model' selector, an alias, or a model id from the catalog (GET /api/v1/models).","code":"invalid_model"}`. The cause was a policy saved under a different name. It was slow to find because the message doesn't mention policies, and the key can't list policies (finding 1).
 - **Suggestion:** when nothing matches, add "or the name of a routing policy in this key's workspace (<workspace>)". Let a key list the policy names it can resolve.
 - **Repro:** `chat <a policy name that doesn't exist>`.
+- **Status:** filed as [#2986](https://github.com/mozilla-ai/otari/issues/2986).
 
 ### 7. CONFIRMED: a provider-narrowed spend ceiling refuses the request instead of skipping to the fallback
 - **Setup (dashboard):**
@@ -102,6 +103,7 @@ Findings from integrating Otari into Faber, a desktop CRM, for Developers Wildin
 - **Suggestion:** give routing-policy plans the same skip on a head refusal that automatic plans already have. Name the provider in a provider-narrowed refusal.
 - **Evidence:** `forced-fallback-2026-11-01.json` (Faber's private evidence folder; redacted copy above).
 - **Repro:** create the ceiling above, then `chat faber-verify --evidence=<file>`.
+- **Status:** filed as [#2981](https://github.com/mozilla-ai/otari/issues/2981).
 
 ### 8. A $0 budget behaved like "no limit" (observed once; the source says it should refuse)
 - **Happened (2026-11-01):** the ceiling was the same as in finding 7, but on a budget saved with a **$0** limit. The request was served on Mistral as if there were no ceiling: HTTP 200, `Otari-Request-ID: 6fc37305-8bcc-4c69-9340-2c25275ddfe5`, `Otari-Provider: mistral`, `Otari-Fallback: false`, `cost_usd: "0.000026"`. Changing **only** the limit to $0.00001 made the next identical request return finding 7's 403.
@@ -121,11 +123,13 @@ Findings from integrating Otari into Faber, a desktop CRM, for Developers Wildin
 - **DX problem:** the message says every provider timed out, but the first one refused the request. Something like "The last candidate timed out (1 earlier candidate refused the request with a 400)" would point at both failures.
 - **Resolved for Faber:** the backup moved to Mistral Large 3 on Bedrock. The same request now falls back and is served (see "What worked well").
 - **Repro:** `chat faber-verify --max=200 --extra={"seed":7}`, with a DeepInfra `gpt-oss-120b` backup.
+- **Status:** filed as [#2983](https://github.com/mozilla-ai/otari/issues/2983).
 
 ### 10. The dashboard trace says "a later attempt answered" when the only later attempt failed
 - **Where:** dashboard → Overview → Sessions → the trace for `4c0dce3a-b459-4bdd-b5e3-ae1a42f5c2fb`.
 - **Happened:** the routing plan on the trace shows #1 failed 400 and #2 failed 504, and the request ended in 504. The "Where the gateway stepped in" panel beside it still says **"a later attempt answered"**.
 - **Suggestion:** word the panel from the final outcome, for example "fell back; the fallback also failed (504)".
+- **Status:** filed as [#2984](https://github.com/mozilla-ai/otari/issues/2984).
 
 ### 11. Direct search (`POST /search`) has no search tool on hosted, though in-loop search works
 - **Docs** (api-reference.md, "Search"; tools.md, "Direct search"): `POST /api/v1/search` runs a configured search tool directly.
@@ -137,17 +141,20 @@ Findings from integrating Otari into Faber, a desktop CRM, for Developers Wildin
 - **Faber's workaround:** one small model call with `otari_web_search` (`max_uses: 1`). Its text is thrown away; only the `sources` from `otari_tool_calls` are kept, then cleaned and screened. This costs about $0.0102 per lookup, where a direct search would cost $0.01 with no model in the loop.
 - **Suggestion:** let direct search use the hosted in-loop backend at the same price, or document that it needs a workspace search key, and word the 400 for tenants.
 - **Repro:** `dsearch Mozilla.ai official website`.
+- **Status:** filed as [#2985](https://github.com/mozilla-ai/otari/issues/2985).
 
 ### 12. A mandated guardrail's 403 doesn't say which check fired
 - **Happened (2026-11-01):** the org's Lakera mandate (prompt defense and PII on) blocked a screening request. The latest user message was the cleaned text of an ordinary bakery's home page, with phone numbers and emails already removed. Response: `403 {"detail":{"message":"Request blocked by guardrail policy.","code":"guardrail_violation","guardrails":[{"profile":"lakera-faber","explanation":null,"score":1}]}}`. Request ID: `caaaf70b-dac8-497c-9775-5d4c7889b32f`. The same flow passed other business pages.
 - **Why it matters:** with `explanation: null` and no detector name, a tenant can't tell a prompt-injection hit from a PII hit. So they can't decide whether to tune the vendor policy or their own text cleaning.
 - **Suggestion:** pass the triggered category (for example `prompt_attack`, `pii/phone_number`) through in `guardrails[].explanation` or a new field, without the vendor's raw message.
+- **Status:** filed as [#2982](https://github.com/mozilla-ai/otari/issues/2982).
 
 ### 13. Lakera blocked a plain instruction to run an MCP tool
 - **Happened (2026-11-07):** a streamed `/messages` request with the Lighthouse MCP server was blocked with 403 `guardrail_violation` before any model ran ($0). Request ID: `a53756fb-4d47-4db1-be49-df598cbc720f`. The user message read: "Call run_lighthouse exactly once … then reply with the single word: done".
 - **Rewording fixed it:** "Please run a mobile Lighthouse audit of the website <url>." passes, and has on every audit since (`a10bf5a9-54e1-40c6-985d-bc765f7547b1`).
 - **Why it matters:** an app's *own* instruction-like wording reads as prompt injection to the vendor model. Since the 403 carries no category (finding 12), the only way to learn this is trial and error.
 - **Suggestion:** same as 12. Docs could also note that a mandate screens the app's own prompt text, not only third-party content.
+- **Status:** included as the second case in [#2982](https://github.com/mozilla-ai/otari/issues/2982).
 
 ### 14. MCP results are only visible on streamed `/messages` with a beta header
 - **Docs** (mcp.md, "Messages streaming activity"; tools.md, "What clients receive"): Chat Completions and Responses "continue to hide this activity". Only streamed `/messages` with `anthropic-beta: mcp-client-2025-11-20` emits `mcp_tool_use` and `mcp_tool_result` blocks.
