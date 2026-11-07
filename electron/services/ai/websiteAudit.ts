@@ -23,13 +23,15 @@ export interface AuditGateway {
 }
 
 export const AUDIT_PROMPT = `You help a freelance web designer judge whether a small business's own website needs work.
-You get the business facts and a summary of a Google Lighthouse audit of its home page on a mobile phone.
+You get the business facts, what the earlier website check found, and a summary of a Google Lighthouse audit of its
+home page on a mobile phone.
 
 Rate the site:
 - modern: scores are mostly good (performance about 70 or more, others about 80 or more) and nothing serious is wrong.
 - needs_work: it works, but mobile speed, accessibility or SEO clearly fall short.
 - outdated: it is badly broken on mobile, very slow (performance under about 40, or main content after about 6 seconds)
-  or fails basic checks across the board.
+  or fails basic checks across the board. A placeholder, parking, "coming soon" or under-construction page is outdated
+  whatever its scores: an almost empty page loads fast and scores well, so read the website check first.
 
 reason: one plain sentence a business owner would understand, quoting one or two of the numbers.
 fixes: up to three short, concrete improvements, taken from the audit's issues, in plain words.
@@ -104,7 +106,10 @@ export function parseAuditDecision(text: string): Pick<WebsiteAudit, 'quality' |
 
 interface AuditLead extends LeadFactSource {
   website_url: string | null;
+  website_reason: string | null;
 }
+
+const CHECK_LABEL = { none: 'no site of its own', found: 'has its own working site', outdated: 'outdated or neglected site', unknown: 'not clear yet' } as const;
 
 export async function auditWebsite(db: Database.Database, gateway: AuditGateway, leadId: number, serverUrl: string): Promise<WebsiteAuditResult> {
   const lead = db.prepare('SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL').get(leadId) as AuditLead | undefined;
@@ -150,7 +155,10 @@ export async function auditWebsite(db: Database.Database, gateway: AuditGateway,
     // 3. Model A's reading
     const decided = await gateway.chat({
       feature: 'website_audit', model: gateway.status().models.verify, leadId, maxTokens: 250, temperature: 0,
-      messages: [{ role: 'system', content: AUDIT_PROMPT }, { role: 'user', content: `${factsForPrompt(publicLeadFacts(lead))}\n\n${screen.text}` }],
+      messages: [{ role: 'system', content: AUDIT_PROMPT }, {
+        role: 'user',
+        content: `${factsForPrompt(publicLeadFacts(lead))}\nWebsite check so far: ${CHECK_LABEL[lead.website_status]}${lead.website_reason ? ` (${plain(lead.website_reason, 200)})` : ''}\n\n${screen.text}`,
+      }],
     });
     track(decided.activity);
     const decision = parseAuditDecision(decided.text);

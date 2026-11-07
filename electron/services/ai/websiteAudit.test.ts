@@ -173,3 +173,13 @@ describe('OtariGateway.mcpRun', () => {
     expect(error.activity).toMatchObject({ outcome: 'blocked', error_code: 'guardrail_violation', request_id: 'req-b' });
   });
 });
+
+describe('audit and the website check', () => {
+  it('tells Model A what the website check found, so a fast placeholder page is not called modern', async () => {
+    const id = addLead({ website_status: 'outdated', website_reason: "Site shows 'under construction' placeholder page." });
+    const { g, chats } = gateway({ decision: '{"quality": "outdated", "reason": "Only an under-construction page.", "fixes": []}' });
+    await auditWebsite(db, g, id, 'https://audit.example/mcp');
+    expect(chats[1].messages[1].content).toContain("Website check so far: outdated or neglected site (Site shows 'under construction' placeholder page.)");
+    expect(AUDIT_PROMPT).toMatch(/under-construction page is outdated\s+whatever its scores/);
+  });
+});
