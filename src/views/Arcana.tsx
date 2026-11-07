@@ -108,8 +108,8 @@ function AboutSection() {
       <ViewHeader themed="Natri's Faber" plain={info.data ? `Version ${info.data.version}${info.data.is_dev ? ' · dev' : ''}` : ''} line="Faber est suae quisque fortunae." />
       <SectionPanel title="This installation">
         <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
-          <dt className="text-ink-muted">Data folder</dt><dd className="break-all font-mono text-xs text-ink">{info.data?.user_data_path}</dd>
-          <dt className="text-ink-muted">Logs</dt><dd className="break-all font-mono text-xs text-ink">{info.data?.logs_path}</dd>
+          <dt className="text-ink-muted">Data folder</dt><dd className="break-all font-mono text-xs text-ink"><span className="sensitive">{info.data?.user_data_path}</span></dd>
+          <dt className="text-ink-muted">Logs</dt><dd className="break-all font-mono text-xs text-ink"><span className="sensitive">{info.data?.logs_path}</span></dd>
         </dl>
         <Button className="self-start" icon={<FileText className="size-4" />} onClick={() => void call('app:openLogs')}>Open logs folder</Button>
       </SectionPanel>

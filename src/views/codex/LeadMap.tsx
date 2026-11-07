@@ -62,7 +62,7 @@ export function LeadMap({ leads, selected, onSelect }: { leads: Lead[]; selected
             <div className="text-[0.82rem]">
               <strong className="block">{lead.name}</strong>
               <span className="block text-ink-muted">{lead.category}</span>
-              {lead.phone && <span className="mt-1 block tabular">{lead.phone}</span>}
+              {lead.phone && <span className="sensitive mt-1 block tabular">{lead.phone}</span>}
             </div>
           </Popup>
         </Marker>

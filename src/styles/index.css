@@ -461,3 +461,19 @@ html[data-hidden="true"] *::after {
   --success: #1E6B5A;
 }
 }
+
+/* Recording mode (Arcana → Appearance, Ctrl+Shift+H): anything marked .sensitive is hidden on screen for
+   recording. Text becomes a solid bar and inputs show dots. Display only; nothing stored changes. */
+html[data-recording="true"] .sensitive:not(input):not(textarea) {
+  color: transparent !important;
+  background: var(--ink-muted);
+  border-radius: 3px;
+  user-select: none;
+}
+html[data-recording="true"] .sensitive:not(input):not(textarea) * {
+  visibility: hidden;
+}
+html[data-recording="true"] input.sensitive,
+html[data-recording="true"] textarea.sensitive {
+  -webkit-text-security: disc;
+}

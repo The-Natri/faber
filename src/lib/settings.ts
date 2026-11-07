@@ -18,11 +18,13 @@ export function useSettings(): SettingsApi {
 }
 
 // Puts the theme and motion preference on <html>, where the CSS tokens read them
-export function applyAppearance(appearance: Pick<Appearance, 'theme' | 'reduceMotion'> & Partial<Pick<Appearance, 'density'>>) {
+export function applyAppearance(appearance: Pick<Appearance, 'theme' | 'reduceMotion'> & Partial<Pick<Appearance, 'density' | 'recordingMode'>>) {
   const root = document.documentElement;
   root.dataset.theme = appearance.theme;
   root.dataset.reduceMotion = String(appearance.reduceMotion);
   root.dataset.density = appearance.density ?? 'comfortable';
+  // Masks every element marked .sensitive (see index.css); display only
+  root.dataset.recording = String(appearance.recordingMode ?? false);
 }
 
 // Small per-viewer conveniences (recent palette items); never anything that must persist

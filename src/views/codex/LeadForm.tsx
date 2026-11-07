@@ -65,9 +65,9 @@ function LeadForm({ lead, onCancel, onSaved }: { lead: Lead | null; onCancel: ()
       <div className="grid grid-cols-2 gap-4">
         <Field label="Name" htmlFor="lead-name" className="col-span-2"><Input {...input('name')} maxLength={200} required autoFocus /></Field>
         <Field label="Category"><Select value={form.category} onChange={set('category')} options={CATEGORY_OPTIONS} label="Category" /></Field>
-        <Field label="Phone" htmlFor="lead-phone"><Input {...input('phone')} maxLength={30} inputMode="tel" /></Field>
-        <Field label="Owner or contact" htmlFor="lead-owner_name"><Input {...input('owner_name')} maxLength={100} /></Field>
-        <Field label="Best time to reach" htmlFor="lead-best_time"><Input {...input('best_time')} maxLength={100} placeholder="e.g. After 4 pm" /></Field>
+        <Field label="Phone" htmlFor="lead-phone"><Input {...input('phone')} className="sensitive" maxLength={30} inputMode="tel" /></Field>
+        <Field label="Owner or contact" htmlFor="lead-owner_name"><Input {...input('owner_name')} className="sensitive" maxLength={100} /></Field>
+        <Field label="Best time to reach" htmlFor="lead-best_time"><Input {...input('best_time')} className="sensitive" maxLength={100} placeholder="e.g. After 4 pm" /></Field>
         <Field label="Address" htmlFor="lead-address" className="col-span-2"><Input {...input('address')} maxLength={300} /></Field>
         <Field label="City" htmlFor="lead-city"><Input {...input('city')} maxLength={100} /></Field>
         <Field label="Website" htmlFor="lead-website_url"><Input {...input('website_url')} maxLength={300} placeholder="https://" /></Field>

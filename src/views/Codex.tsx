@@ -360,7 +360,7 @@ function LeadRow({ lead, selected, checked, onSelect, onCheck, onStar }: {
             {lead.category || 'Uncategorized'}{lead.city ? ` · ${lead.city}` : ''}
             {lead.tags.length > 0 && <span className="text-ink"> · {lead.tags.join(', ')}</span>}
           </span>
-          {lead.phone && <span className="inline-flex shrink-0 items-center gap-1 tabular"><Phone className="size-3" />{lead.phone}</span>}
+          {lead.phone && <span className="sensitive inline-flex shrink-0 items-center gap-1 tabular"><Phone className="size-3" />{lead.phone}</span>}
         </div>
       </div>
       <button

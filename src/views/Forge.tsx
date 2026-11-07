@@ -291,7 +291,7 @@ function ProjectDetail({ project, onChanged, onDelete }: { project: ProjectWithL
           <Field label="Category"><Select value={form.category} onChange={(v) => set({ category: v })} options={CATEGORY_OPTIONS} label="Category" /></Field>
           <Field label="Stage"><Select value={form.stage} onChange={(v) => set({ stage: v })} options={STAGE_OPTIONS} label="Stage" /></Field>
         </div>
-        <Field label="Phone number" htmlFor="pd-phone"><Input id="pd-phone" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="e.g. +91 98765 43210" /></Field>
+        <Field label="Phone number" htmlFor="pd-phone"><Input id="pd-phone" className="sensitive" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="e.g. +91 98765 43210" /></Field>
         <Field label="Project scope" htmlFor="pd-scope"><Textarea id="pd-scope" rows={2} value={form.scope} onChange={(e) => set({ scope: e.target.value })} placeholder="Key deliverables and client requirements…" /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Payment agreed (₹)" htmlFor="pd-agreed"><Input id="pd-agreed" type="number" min={0} className="tabular" value={form.payment_agreed} onChange={(e) => set({ payment_agreed: e.target.value })} placeholder="0" /></Field>
@@ -369,7 +369,7 @@ function AddProjectDialog({ open, onOpenChange, onCreated }: { open: boolean; on
           <Input id="np-name" autoFocus value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Website redesign for a local cafe" />
         </Field>
         <Field label="Category"><Select value={form.category} onChange={(v) => set({ category: v })} options={CATEGORY_OPTIONS} label="Category" /></Field>
-        <Field label="Phone number" htmlFor="np-phone"><Input id="np-phone" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="e.g. +91 98765 43210" /></Field>
+        <Field label="Phone number" htmlFor="np-phone"><Input id="np-phone" className="sensitive" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="e.g. +91 98765 43210" /></Field>
         <Field label="Scope" htmlFor="np-scope"><Textarea id="np-scope" rows={2} value={form.scope} onChange={(e) => set({ scope: e.target.value })} placeholder="Deliverables summary…" /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Payment agreed (₹)" htmlFor="np-agreed"><Input id="np-agreed" type="number" min={0} className="tabular" value={form.payment_agreed} onChange={(e) => set({ payment_agreed: e.target.value })} placeholder="0" /></Field>

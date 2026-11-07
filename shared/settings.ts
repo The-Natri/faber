@@ -36,6 +36,9 @@ export const appearanceSchema = z.object({
   // Synthesized sound effects (unlock, seal, letter, anvil, payment); off by default
   soundEnabled: z.boolean().default(false),
   soundVolume: z.number().int().min(0).max(100).default(60),
+  // Recording mode: hides phone numbers, owner names and your own contact details on screen (Ctrl+Shift+H).
+  // Display only; nothing stored changes.
+  recordingMode: z.boolean().default(false),
 });
 
 export const homeBaseSchema = z.object({

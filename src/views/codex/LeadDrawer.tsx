@@ -230,14 +230,14 @@ function LeadDetail({ lead, actions, tagSuggestions }: { lead: Lead; actions: Le
           <dt className="text-xs text-ink-muted">Phone</dt>
           <dd className="mt-0.5">
             {lead.phone
-              ? <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1.5 font-medium text-gold-ink tabular hover:underline"><Phone className="size-3.5" />{lead.phone}</a>
+              ? <a href={`tel:${lead.phone}`} className="sensitive inline-flex items-center gap-1.5 font-medium text-gold-ink tabular hover:underline"><Phone className="size-3.5" />{lead.phone}</a>
               : <span className="text-ink-muted">Not available</span>}
           </dd>
         </div>
         {(lead.owner_name || lead.best_time) && (
           <>
-            <Detail label="Owner or contact" value={lead.owner_name || '—'} />
-            <Detail label="Best time" value={lead.best_time || '—'} />
+            <Detail label="Owner or contact" value={lead.owner_name || '—'} sensitive />
+            <Detail label="Best time" value={lead.best_time || '—'} sensitive />
           </>
         )}
         <div className="col-span-2">
@@ -553,7 +553,7 @@ function PitchPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<
           <label htmlFor="pitch-body" className="sr-only">Message</label>
           <Textarea id="pitch-body" rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
           <div className="flex items-start justify-between gap-3 text-xs text-ink-muted">
-            <span className="whitespace-pre-line">{draft.signOff || 'Add your name and number in Arcana → Profile for a sign-off.'}</span>
+            <span className={cn('whitespace-pre-line', draft.signOff && 'sensitive')}>{draft.signOff || 'Add your name and number in Arcana → Profile for a sign-off.'}</span>
             <span className={cn('shrink-0 tabular', body.trim().length > 600 && 'text-st-lost')}>{body.trim().length}/600</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -585,11 +585,11 @@ function PitchPanel({ lead, onChanged }: { lead: Lead; onChanged: () => Promise<
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ label, value, sensitive = false }: { label: string; value: string; sensitive?: boolean }) {
   return (
     <div>
       <dt className="text-xs text-ink-muted">{label}</dt>
-      <dd className="mt-0.5 text-ink tabular">{value}</dd>
+      <dd className="mt-0.5 text-ink tabular"><span className={sensitive ? 'sensitive' : undefined}>{value}</span></dd>
     </div>
   );
 }

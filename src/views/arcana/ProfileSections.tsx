@@ -12,12 +12,12 @@ export function ProfileSection() {
   return (
     <SectionPanel title="Profile & business" subtitle="Shown on quotes, invoices and outreach messages." footer={<SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onReset={reset} />}>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Your name" htmlFor="p-name"><Input id="p-name" value={draft.yourName} onChange={(e) => set({ yourName: e.target.value })} /></Field>
+        <Field label="Your name" htmlFor="p-name"><Input id="p-name" className="sensitive" value={draft.yourName} onChange={(e) => set({ yourName: e.target.value })} /></Field>
         <Field label="Business name" htmlFor="p-business"><Input id="p-business" value={draft.businessName} onChange={(e) => set({ businessName: e.target.value })} /></Field>
-        <Field label="Phone" htmlFor="p-phone"><Input id="p-phone" value={draft.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
-        <Field label="Email" htmlFor="p-email"><Input id="p-email" type="email" value={draft.email} onChange={(e) => set({ email: e.target.value })} /></Field>
-        <Field label="UPI ID" htmlFor="p-upi" hint="Used for the payment QR on invoices, e.g. name@okicici"><Input id="p-upi" value={draft.upiId} onChange={(e) => set({ upiId: e.target.value })} /></Field>
-        <Field label="Address" htmlFor="p-address"><Input id="p-address" value={draft.address} onChange={(e) => set({ address: e.target.value })} /></Field>
+        <Field label="Phone" htmlFor="p-phone"><Input id="p-phone" className="sensitive" value={draft.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
+        <Field label="Email" htmlFor="p-email"><Input id="p-email" className="sensitive" type="email" value={draft.email} onChange={(e) => set({ email: e.target.value })} /></Field>
+        <Field label="UPI ID" htmlFor="p-upi" hint="Used for the payment QR on invoices, e.g. name@okicici"><Input id="p-upi" className="sensitive" value={draft.upiId} onChange={(e) => set({ upiId: e.target.value })} /></Field>
+        <Field label="Address" htmlFor="p-address"><Input id="p-address" className="sensitive" value={draft.address} onChange={(e) => set({ address: e.target.value })} /></Field>
         <Field label="Invoice prefix" htmlFor="p-inv"><Input id="p-inv" value={draft.invoicePrefix} onChange={(e) => set({ invoicePrefix: e.target.value })} /></Field>
         <Field label="Quote prefix" htmlFor="p-quote"><Input id="p-quote" value={draft.quotePrefix} onChange={(e) => set({ quotePrefix: e.target.value })} /></Field>
       </div>
@@ -116,6 +116,8 @@ export function AppearanceSection() {
       </Field>
       <Switch id="ap-motion" checked={appearance.reduceMotion} onChange={(reduceMotion) => void change({ reduceMotion })} label="Reduce motion" description="Turns off decorative animation. Faber also follows the Windows setting." />
       <Switch id="ap-sidebar" checked={appearance.sidebarCollapsed} onChange={(sidebarCollapsed) => void change({ sidebarCollapsed })} label="Collapse the sidebar to icons" />
+      <Switch id="ap-recording" checked={appearance.recordingMode} onChange={(recordingMode) => void change({ recordingMode })}
+        label="Recording mode (Ctrl+Shift+H)" description="For screen recordings: hides phone numbers, owner names, your sign-off and profile details, and your username. Display only; nothing stored changes." />
       <div className="rounded-md border border-border p-4">
         <Switch id="ap-sound" checked={appearance.soundEnabled} onChange={(soundEnabled) => void change({ soundEnabled })}
           label="Sound effects" description="Soft synthesized sounds for unlocking, the seal stamp, letters sent, the anvil and payments received." />

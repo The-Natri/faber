@@ -18,6 +18,7 @@ const SHORTCUTS: [string[], string][] = [
   [['/'], 'Focus search'],
   [['Ctrl', 'N'], 'New item in this view'],
   [['Ctrl', 'L'], 'Lock Faber'],
+  [['Ctrl', 'Shift', 'H'], 'Recording mode: hide phone numbers, names and your contact details'],
   [['Esc'], 'Close drawers and dialogs'],
   [['?'], 'Show this list'],
 ];
@@ -72,6 +73,14 @@ export function Shell({ username, locked, onLock }: { username: string; locked: 
     update('appearance', { theme }).catch((err) => toast({ title: 'Could not switch theme', description: errorText(err), tone: 'error' }));
   const toggleTheme = () => void setTheme(appearance?.theme === 'parchment' ? 'nocturne' : 'parchment');
 
+  // Recording mode hides phone numbers, owner names and your own details on screen; display only
+  const recording = appearance?.recordingMode ?? false;
+  const toggleRecording = useCallback(() => {
+    update('appearance', { recordingMode: !recording })
+      .then(() => toast({ title: recording ? 'Recording mode off' : 'Recording mode on', description: recording ? undefined : 'Phone numbers, names and your contact details are hidden.' }))
+      .catch((err) => toast({ title: 'Could not switch recording mode', description: errorText(err), tone: 'error' }));
+  }, [recording, update, toast]);
+
   const exportCsv = async (entity: ExportEntity) => {
     try {
       const { path, rows } = await call('export:csv', { entity });
@@ -102,6 +111,7 @@ export function Shell({ username, locked, onLock }: { username: string; locked: 
     { id: 'trash', label: 'Open the trash', keywords: 'deleted restore', run: () => navigate({ view: 'arcana', section: 'data' }) },
     { id: 'theme', label: `Switch to ${appearance?.theme === 'parchment' ? 'nocturne' : 'parchment'}`, keywords: 'theme dark light', run: toggleTheme },
     { id: 'lock', label: 'Lock Faber', hint: 'Ctrl+L', keywords: 'sign out', run: onLock },
+    { id: 'recording', label: 'Toggle recording mode', hint: 'Ctrl+Shift+H', keywords: 'privacy hide mask screen record video', run: () => toggleRecording() },
     { id: 'shortcuts', label: 'Show keyboard shortcuts', hint: '?', keywords: 'keys help', run: () => setShortcutsOpen(true) },
   ];
 
@@ -117,6 +127,7 @@ export function Shell({ username, locked, onLock }: { username: string; locked: 
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette({ open: true, query: '' }); return; }
       if (ctrl && e.key.toLowerCase() === 'l') { e.preventDefault(); onLock(); return; }
+      if (ctrl && e.shiftKey && e.key.toLowerCase() === 'h') { e.preventDefault(); toggleRecording(); return; }
       if (ctrl && /^[1-9]$/.test(e.key)) {
         const item = NAV[Number(e.key) - 1];
         if (item) { e.preventDefault(); navigate({ view: item.id }); }
@@ -133,7 +144,7 @@ export function Shell({ username, locked, onLock }: { username: string; locked: 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, locked, navigate, onLock]);
+  }, [current, locked, navigate, onLock, toggleRecording]);
 
   const active = navItem(current);
   const View = active.component;
@@ -163,7 +174,13 @@ export function Shell({ username, locked, onLock }: { username: string; locked: 
               {appearance?.theme === 'parchment' ? <Moon className="size-4" /> : <Sun className="size-4" />}
             </IconButton>
             <IconButton label="Lock" shortcut="Ctrl+L" onClick={onLock}><Lock className="size-4" /></IconButton>
-            <span className="ml-1 hidden text-sm text-ink-muted lg:inline">{username}</span>
+            {appearance?.recordingMode && (
+              <button type="button" onClick={toggleRecording} title="Recording mode is on: phone numbers, names and your contact details are hidden. Ctrl+Shift+H turns it off."
+                className="rounded-full border px-2.5 py-0.5 text-xs font-semibold text-st-lost cursor-pointer" style={{ borderColor: 'var(--hue-lost)' }}>
+                ● Recording mode
+              </button>
+            )}
+            <span className="sensitive ml-1 hidden text-sm text-ink-muted lg:inline">{username}</span>
           </header>
 
           <main className="relative min-h-0 flex-1 overflow-hidden">
