@@ -157,7 +157,7 @@ Findings from integrating Otari into Faber, a desktop CRM, for Developers Wildin
 ### 15. Hosted tool prices aren't published
 - **Measured on hosted EU:**
   - Each web search, web fetch or code-execution run is a flat **$0.01** on top of model tokens. A search also feeds about 3.6k tokens of results back as input.
-  - An "Ask your pipeline" answer cost $0.011006 in total (`041323b4-7b25-4a89-b5e3-2d34ba023ae0`).
+  - An "Ask your pipeline" answer cost $0.011006 in total (`041323b4-7b25-4a89-b5e9-2d34ba023ae0`).
   - A gateway-run **MCP call carried no per-call charge**: a full Lighthouse audit cost $0.0006–0.0009 in tokens.
 - **Why it matters:** tools.md explains how rates are set, but the hosted rates aren't listed anywhere, and the inline `usage` gives only a total.
 - **Suggestion:** publish the hosted tool rates, and add a per-tool line to the inline `usage`.
