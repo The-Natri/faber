@@ -23,8 +23,8 @@ Built for Mozilla's **Developers Wilding: Online** hackathon.
 
 ## Videos
 
-- Demo video: (link coming)
-- Feedback video: (link coming)
+- Demo video: https://youtu.be/WO3_MgSnZFg
+- Feedback: written, see [OTARI_FEEDBACK.md](OTARI_FEEDBACK.md). No video.
 
 ## What the AI does
 
